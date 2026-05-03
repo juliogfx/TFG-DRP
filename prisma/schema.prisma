@@ -1,0 +1,793 @@
+// =============================================================================
+// schema.prisma — TFG-DRP  v3.0
+// Sistema de Gestión de Dispositivos de Riesgos Previsibles
+// Stack : Next.js 14 + TypeScript + Prisma + Supabase (PostgreSQL)
+//
+// CHANGELOG v3 (02-may-2026) — decisiones usuarios confirmadas:
+//   + Tabla Contrato       (agrupa N eventos; estadísticas por temporada)
+//   + Evento.contrato_id   FK nullable → Contrato
+//   + Evento.temporada     String (ej: "2025-2026")  ← campo independiente del contrato
+//   ~ RolUsuario           + EMPRESA_CONTRATANTE, EMPRESA_FACULTATIVOS
+//   ~ Ubicacion            + aforo_maximo, observaciones
+//   ~ Puesto               + requiere_vehiculo BOOLEAN
+//   ~ Intervencion         observaciones TEXT ya existía en v2 ✓
+//   [vista] comprobacion_evento → ver SQL al final del fichero (no modelo Prisma)
+//   [seed]  Sintomatologia → 15 entradas confirmadas del Excel UCO Bernabéu
+//
+// Total tablas: 16 MVP + 3 post-MVP = 19 modelos
+// Tablas catálogo (seed obligatorio antes del 1er migrate):
+//   Ubicacion · Puesto · Sintomatologia
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+/// Roles de acceso. Confirmados por usuarios reales + validación 15-abr-2026.
+/// EMPRESA_CONTRATANTE : Cruz Roja u otra empresa de voluntarios contratada.
+/// EMPRESA_FACULTATIVOS: empresa externa que aporta médicos/enfermeros.
+enum RolUsuario {
+  UCO                  // Unidad de Coordinación de Operaciones — Cuadro de Mando
+  COORDINADOR          // Coordinador general del DRP
+  VOLUNTARIO           // Personal de campo
+  FACULTATIVO          // Médico / enfermero (a título individual)
+  ALMACEN              // Gestión de inventario y material
+  ADMIN                // Administrador del sistema
+  EMPRESA_CONTRATANTE  // ← v3: empresa de voluntarios (Cruz Roja, etc.)
+  EMPRESA_FACULTATIVOS // ← v3: empresa de facultativos externos
+}
+
+/// Tipo de dotación operativa. Basado en códigos reales del Excel:
+/// CAM.NOR, CAM.SUR, Z202, Z220, Z221, UVI1, UVI2, SVB1Z317, SVB2Z318, LIMA…
+enum TipoDotacion {
+  AMBULANCIA  // SVA/SVB — CAM.NOR, CAM.SUR
+  BOTIQUIN    // Botiquín fijo
+  UVI         // Unidad de Vigilancia Intensiva móvil — UVI1, UVI2
+  SVB         // Soporte Vital Básico — Z220, Z221, SVB1Z317, SVB2Z318
+  CLINICA     // Clínica de campo — CLINICA2, CLINICA3
+  AVANZADA    // Puesto de Mando Avanzado
+  BANQUILLO   // Posición banquillo deportivo — BANQ.
+  LIMA        // Coordinación / Lima
+  UCO_UNIT    // Unidad UCO
+}
+
+/// Estado operativo en tiempo real (visible en Cuadro de Mando).
+enum EstadoDotacion {
+  DISPONIBLE
+  EN_INTERVENCION
+  NO_OPERATIVA
+}
+
+/// Tipo de personal sanitario.
+enum TipoPersona {
+  VOLUNTARIO
+  FACULTATIVO
+}
+
+/// Tipo de evento DRP. Del Excel 2526Partidos.xlsx (columna "Tipo").
+enum TipoEvento {
+  LIGA
+  CHAMPIONS
+  COPA
+  AMISTOSO
+  CONCIERTO
+  EVENTO_CORPORATIVO
+}
+
+/// Gravedad clínica anonimizada.
+enum GravedadIntervencion {
+  LEVE
+  MODERADA
+  GRAVE
+  CRITICA
+}
+
+/// Estado físico del walkie en inventario.
+enum EstadoWalkie {
+  DISPONIBLE
+  ASIGNADO
+  AVERIADO
+  BAJA
+}
+
+/// Categoría del material sanitario.
+enum TipoMaterial {
+  CONSUMIBLE   // gasas, guantes, vendas
+  REUTILIZABLE // tensiómetros, pulsioxímetros
+  MEDICAMENTO  // mórficos, ampularios — marcar esCritico=true
+  EQUIPO       // DESA/DEA, silla, camilla nido, monitor
+}
+
+/// Estado del ítem revisado durante escaneo QR.
+enum EstadoRevisionItem {
+  OK
+  FALTA
+  DANADO
+  CADUCADO
+}
+
+/// Tipo de alerta de material (post-MVP).
+enum TipoAlerta {
+  STOCK_BAJO
+  CADUCIDAD_PROXIMA
+  MATERIAL_DANADO
+}
+
+// =============================================================================
+// CATÁLOGO A: UBICACION  [MVP ⭐⭐⭐]
+// Recinto físico reutilizable entre eventos y temporadas.
+// Beneficio: "Estadio Santiago Bernabéu" existe 1 sola vez, no 38.
+// v3: + aforo_maximo INT, + observaciones TEXT (confirmados por usuario).
+// =============================================================================
+
+model Ubicacion {
+  id           Int     @id @default(autoincrement())
+  /// Nombre oficial. Ej: "Estadio Santiago Bernabéu", "Palacio de los Deportes".
+  nombre       String  @db.VarChar(200)
+  direccion    String  @db.VarChar(300)
+  cp           String  @db.VarChar(10)
+  poblacion    String  @db.VarChar(100)
+  /// Aforo máximo autorizado del recinto. Útil para validar Evento.aforoPrevisto.
+  aforoMaximo  Int?    @map("aforo_maximo")
+  observaciones String? @db.Text
+
+  // Relations
+  eventos      Evento[]
+  contratos    Contrato[]
+
+  @@map("ubicacion")
+}
+
+// =============================================================================
+// CATÁLOGO B: PUESTO  [MVP ⭐⭐⭐]
+// Catálogo de tipos de posición física (reemplaza ENUM TipoPosicion).
+// Admin puede añadir nuevos tipos sin deploy.
+// v3: + requiere_vehiculo BOOLEAN (confirmado por usuario avanzado).
+// Seed: BOTIQUIN, UVI_MOVIL, AMBULANCIA, CLINICA, BANQUILLO,
+//       PUESTO_CONTROL, HELIPUERTO
+// =============================================================================
+
+model Puesto {
+  id               Int     @id @default(autoincrement())
+  /// Nombre del tipo. Ej: "BOTIQUIN", "UVI_MOVIL", "CLINICA", "HELIPUERTO".
+  nombre           String  @unique @db.VarChar(100)
+  descripcion      String? @db.VarChar(500)
+  /// TRUE si el puesto implica un vehículo (ambulancia, UVI móvil).
+  requiereVehiculo Boolean @default(false) @map("requiere_vehiculo")
+
+  // Relations
+  posiciones               Posicion[]
+  asignacionesMaterialTipo AsignacionMaterialPosicion[] @relation("TemplatePorPuesto")
+
+  @@map("puesto")
+}
+
+// =============================================================================
+// CATÁLOGO C: SINTOMATOLOGIA  [MVP ⭐⭐⭐]
+// Catálogo controlado de síntomas/diagnósticos operativos.
+// SOLO ADMIN puede añadir entradas (no el UCO en caliente).
+// UCO usa campo Intervencion.observaciones como escape hatch si no encuentra el síntoma.
+//
+// SEED OFICIAL (confirmado del Excel UCO Bernabéu 2526UCOBERNABEUIntervenciones.xlsx):
+//   1.  PÉRDIDA DE CONSCIENCIA    9.  DOLOR TORÁCICO
+//   2.  MALESTAR GENERAL          10. DIFICULTAD RESPIRATORIA
+//   3.  MAREOS                    11. INTOXICACIÓN ETÍLICA
+//   4.  VÓMITOS                   12. GOLPE DE CALOR
+//   5.  SÍNCOPE                   13. POLITRAUMATISMO
+//   6.  TRAUMATISMO               14. REACCIÓN ALÉRGICA
+//   7.  HERIDA                    15. OTROS
+//   8.  CRISIS EPILÉPTICA
+// =============================================================================
+
+model Sintomatologia {
+  id          Int     @id @default(autoincrement())
+  /// Nombre clínico operativo. Ej: "PÉRDIDA DE CONSCIENCIA". UNIQUE.
+  tipo        String  @unique @db.VarChar(100)
+  descripcion String? @db.VarChar(500)
+
+  // Relations
+  intervenciones Intervencion[]
+
+  @@map("sintomatologia")
+}
+
+// =============================================================================
+// NUEVO v3: CONTRATO  [MVP ⭐⭐]
+// Agrupa N eventos bajo un acuerdo comercial (promotor + temporada).
+// Caso de uso confirmado por usuario real:
+//   "Live Nation contrata a Cruz Roja para 10 servicios → Contrato 1
+//    con 10 DRP asociados."
+// Permite estadísticas por contrato, por temporada, y por rango de temporadas
+// (ej: comparar 2024-2025 vs 2025-2026 vs 2026-2027).
+// Un Evento puede existir sin Contrato (contrato_id nullable).
+// =============================================================================
+
+model Contrato {
+  id          Int       @id @default(autoincrement())
+  /// Nombre descriptivo. Ej: "Bad Bunny Tour Mayo 2026", "Liga 2025-2026 Bernabéu".
+  nombre      String    @db.VarChar(200)
+  /// Entidad contratante. Ej: "Live Nation", "Real Madrid C.F.", "Ayuntamiento".
+  promotor    String    @db.VarChar(200)
+  /// Temporada deportiva/cultural. Ej: "2025-2026". Permite filtros anuales.
+  temporada   String    @db.VarChar(20)
+  /// Recinto principal del contrato (puede haber eventos en recintos distintos).
+  ubicacionId Int?      @map("ubicacion_id")
+  fechaInicio DateTime  @map("fecha_inicio") @db.Date
+  fechaFin    DateTime  @map("fecha_fin") @db.Date
+  observaciones String? @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  ubicacion Ubicacion? @relation(fields: [ubicacionId], references: [id])
+  eventos   Evento[]
+
+  @@index([temporada])
+  @@index([promotor])
+  @@map("contrato")
+}
+
+// =============================================================================
+// 1. USUARIO_SISTEMA  [MVP ⭐⭐⭐]
+// Autenticación y roles. Integración con NextAuth + Supabase Auth.
+// =============================================================================
+
+model UsuarioSistema {
+  id             Int        @id @default(autoincrement())
+  email          String     @unique @db.VarChar(255)
+  passwordHash   String     @map("password_hash") @db.VarChar(255)
+  nombreCompleto String     @map("nombre_completo") @db.VarChar(150)
+  rol            RolUsuario
+  activo         Boolean    @default(true)
+  fechaRegistro  DateTime   @default(now()) @map("fecha_registro")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  eventosComoUco    Evento[]            @relation("EventoUCO")
+  intervencionesUco Intervencion[]      @relation("IntervencionUCO")
+  revisionesMat     RevisionMaterial[]
+  estadosLog        EstadoDotacionLog[]
+
+  @@index([rol])
+  @@map("usuario_sistema")
+}
+
+// =============================================================================
+// 2. EVENTO  [MVP ⭐⭐⭐]
+// 1 evento = 1 jornada. Sin multiday. DECISIÓN CONFIRMADA.
+// v3: + contrato_id FK nullable → Contrato
+//     + temporada String (puede diferir de Contrato.temporada en casos edge)
+// =============================================================================
+
+model Evento {
+  id                    Int        @id @default(autoincrement())
+  /// Nombre legible. Ej: "Real Madrid vs PSG — J3 Champions 25/26".
+  nombre                String     @db.VarChar(200)
+  /// FK a Ubicacion (recinto físico reutilizable).
+  ubicacionId           Int        @map("ubicacion_id")
+  fecha                 DateTime   @db.Date
+  tipo                  TipoEvento @default(LIGA)
+  rival                 String?    @db.VarChar(200)
+  aforoPrevisto         Int?       @map("aforo_previsto")
+  /// Aforo estimado real (puede diferir del previsto).
+  aforoEstimado         Int?       @map("aforo_estimado")
+  /// FK nullable al contrato que agrupa este evento. Ej: "Liga 2025-2026".
+  contratoId            Int?       @map("contrato_id")
+  /// Temporada. Ej: "2025-2026". Redundante si contratoId != null,
+  /// pero necesario para eventos sin contrato (partidos sueltos, eventos únicos).
+  temporada             String?    @db.VarChar(20)
+  /// HORA INCORPORACION EN SSPP — Excel Datos fila 5.
+  horaIncorporacionSspp DateTime?  @map("hora_incorporacion_sspp")
+  /// HORA FINALIZACION EN SSPP — Excel Datos fila 6.
+  horaFinalizacionSspp  DateTime?  @map("hora_finalizacion_sspp")
+  /// Hora apertura UCO (inicio del Cuadro de Mando).
+  horaInicioUco         DateTime?  @map("hora_inicio_uco")
+  /// Nombre libre del director médico (persona externa, sin FK).
+  directorMedico        String?    @map("director_medico") @db.VarChar(150)
+  /// Promotor del evento concreto (puede diferir del promotor del contrato).
+  promotor              String?    @db.VarChar(200)
+  /// UCO responsable del Cuadro de Mando.
+  coordinadorUcoId      Int?       @map("coordinador_uco_id")
+  /// Temperatura °C en clínicas. Requerida por usuarios (validación 15-abr).
+  temperaturaClinica    Decimal?   @map("temperatura_clinica") @db.Decimal(4, 1)
+  observaciones         String?    @db.Text
+  /// Soft delete — NUNCA borrar físicamente datos históricos.
+  deletedAt             DateTime?  @map("deleted_at")
+  createdAt             DateTime   @default(now()) @map("created_at")
+  updatedAt             DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  ubicacion          Ubicacion          @relation(fields: [ubicacionId], references: [id])
+  contrato           Contrato?          @relation(fields: [contratoId], references: [id])
+  coordinadorUco     UsuarioSistema?    @relation("EventoUCO", fields: [coordinadorUcoId], references: [id])
+  posiciones         Posicion[]
+  dotaciones         Dotacion[]
+  intervenciones     Intervencion[]
+  revisionesMat      RevisionMaterial[]
+  asignacionesWalkie AsignacionWalkie[]
+
+  @@index([fecha])
+  @@index([tipo])
+  @@index([ubicacionId])
+  @@index([contratoId])
+  @@index([temporada])
+  @@map("evento")
+}
+
+// =============================================================================
+// 3. POSICION  [MVP ⭐⭐⭐]
+// Lugar físico del recinto con QR PERMANENTE.
+// v3: tipo ENUM → puestoId FK (catálogo Puesto). Ya implementado en v2.
+// =============================================================================
+
+model Posicion {
+  id                Int     @id @default(autoincrement())
+  eventoId          Int     @map("evento_id")
+  /// Nombre legible. Ej: "Botiquín A", "UVI1", "Clínica P19", "Banquillo".
+  nombre            String  @db.VarChar(100)
+  /// UUID del QR físico impreso y pegado. PERMANENTE — no regenerar nunca.
+  codigoQr          String  @unique @map("codigo_qr") @db.VarChar(100)
+  /// FK al catálogo Puesto. Ej: BOTIQUIN, UVI_MOVIL, CLINICA.
+  puestoId          Int     @map("puesto_id")
+  /// Zona del recinto. Ej: "Gradas Norte", "Acceso VIP", "Campo de Juego".
+  sector            String? @db.VarChar(100)
+  capacidadPersonas Int?    @map("capacidad_personas")
+
+  // Relations
+  evento                Evento                       @relation(fields: [eventoId], references: [id])
+  puesto                Puesto                       @relation(fields: [puestoId], references: [id])
+  dotacion              Dotacion?
+  revisiones            RevisionMaterial[]
+  asignacionesMat       AsignacionMaterialPosicion[] @relation("AsignacionPorPosicion")
+  intervencionesDestino Intervencion[]               @relation("ClinicaDestino")
+
+  @@index([eventoId])
+  @@index([codigoQr])
+  @@index([puestoId])
+  @@map("posicion")
+}
+
+// =============================================================================
+// 4. DOTACION  [MVP ⭐⭐⭐]
+// Equipo operativo desplegado. Códigos reales del Excel:
+// CAM.NOR, CAM.SUR, Z202, Z220, Z221, UVI1, UVI2, SVB1Z317, SVB2Z318, LIMA…
+// =============================================================================
+
+model Dotacion {
+  id             Int            @id @default(autoincrement())
+  eventoId       Int            @map("evento_id")
+  /// Código del equipo. Ej: "Z220", "CAM.NOR", "UVI1", "SVB1Z317".
+  codigo         String         @db.VarChar(50)
+  /// Posición física asignada (relación 1 dotación : 1 posición).
+  posicionId     Int?           @unique @map("posicion_id")
+  tipo           TipoDotacion
+  personalMinimo Int            @default(2) @map("personal_minimo")
+  estado         EstadoDotacion @default(DISPONIBLE)
+  /// Indicativo de radio. Ej: "ZULU 220", "OSCAR 310", "LIMA".
+  indicativo     String?        @db.VarChar(50)
+  /// Número de DUES (desfibriladores). Campo DUES del Excel Datos.
+  numDues        Int            @default(0) @map("num_dues")
+  deletedAt      DateTime?      @map("deleted_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  evento                 Evento                       @relation(fields: [eventoId], references: [id])
+  posicion               Posicion?                    @relation(fields: [posicionId], references: [id])
+  personal               AsignacionPersonalDotacion[]
+  walkies                AsignacionWalkie[]
+  intervencionesActivas  Intervencion[]               @relation("DotacionActiva")
+  intervencionesApoyo    Intervencion[]               @relation("DotacionApoyo")
+  intervencionesTraslado Intervencion[]               @relation("DotacionTraslado")
+  estadosLog             EstadoDotacionLog[]
+
+  @@unique([eventoId, codigo])
+  @@index([eventoId])
+  @@index([estado])
+  @@map("dotacion")
+}
+
+// =============================================================================
+// 5. PERSONA  [MVP ⭐⭐⭐]
+// Personal sanitario. SIN DNI (RGPD). Identificador: email único + id interno.
+// =============================================================================
+
+model Persona {
+  id             Int         @id @default(autoincrement())
+  nombreCompleto String      @map("nombre_completo") @db.VarChar(150)
+  /// Identificador único RGPD-safe. Sin DNI almacenado.
+  email          String      @unique @db.VarChar(255)
+  telefono       String?     @db.VarChar(20)
+  tipo           TipoPersona
+  /// Ej: "Socorrista", "Enfermero/a DUE", "Médico/a", "TES".
+  titulacion     String      @db.VarChar(100)
+  /// Nº acreditación o colegiado. Excel col ACREDITACIÓN.
+  acreditacion   String?     @db.VarChar(100)
+  activo         Boolean     @default(true)
+  observaciones  String?     @db.Text
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  asignaciones   AsignacionPersonalDotacion[]
+
+  @@index([tipo])
+  @@index([activo])
+  @@map("persona")
+}
+
+// =============================================================================
+// 6. ASIGNACION_PERSONAL_DOTACION  [MVP ⭐⭐⭐]
+// Persona ↔ Dotacion en un evento. Cubre asistencia + control horario.
+// Fusiona disponibilidad con asistencia real (confirmado validación usuarios).
+// =============================================================================
+
+model AsignacionPersonalDotacion {
+  id              Int       @id @default(autoincrement())
+  dotacionId      Int       @map("dotacion_id")
+  personaId       Int       @map("persona_id")
+  /// "Conductor", "Socorrista", "Enfermero", "Médico", "Prácticas",
+  /// "Coordinador", "Técnico Comunicaciones".
+  rolEnDotacion   String    @map("rol_en_dotacion") @db.VarChar(60)
+  /// Hora prevista de incorporación. Excel Asistentes col INCORPORACIÓN.
+  turnoInicioPrev DateTime? @map("turno_inicio_prev")
+  turnoFinPrev    DateTime? @map("turno_fin_prev")
+  /// null=pendiente · true=asistió · false=falta/baja.
+  asiste          Boolean?
+  /// Hora entrada real registrada en campo.
+  turnoInicioReal DateTime? @map("turno_inicio_real")
+  turnoFinReal    DateTime? @map("turno_fin_real")
+  /// Excel: OBSERV. / ACREDIT.
+  observaciones   String?   @db.VarChar(300)
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  dotacion  Dotacion @relation(fields: [dotacionId], references: [id])
+  persona   Persona  @relation(fields: [personaId], references: [id])
+
+  @@unique([dotacionId, personaId])
+  @@index([dotacionId])
+  @@index([personaId])
+  @@map("asignacion_personal_dotacion")
+}
+
+// =============================================================================
+// 7. INTERVENCION  [MVP ⭐⭐⭐]
+// DECISIÓN CONFIRMADA: registro ANONIMIZADO. Sin nombre ni DNI del paciente.
+// Campos del Excel 2526UCOBERNABEUIntervenciones.xlsx:
+//   CLAVE1→hora_aviso, CLAVE2→hora_llegada, ACTIVO→dotacion_activa_id,
+//   APOYO→dotacion_apoyo_id, LUGAR→lugar, TRASLADO CLÍNICA→clinica_destino_id,
+//   PARTE→parte, UCO→usuario_uco_id
+// v3: sintomatologiaId FK confirma catálogo controlado.
+//     observaciones TEXT = escape hatch cuando síntoma no está en catálogo.
+//   ⚠️ DECISIÓN #1 PENDIENTE AÚN: 2ª col APOYO del Excel.
+//      MVP: 1 solo dotacion_apoyo_id. Post-MVP: tabla IntervencionApoyo.
+// =============================================================================
+
+model Intervencion {
+  id                 Int                  @id @default(autoincrement())
+  eventoId           Int                  @map("evento_id")
+  /// Nº secuencial por evento. Campo TOT. del Excel UCO.
+  numeroIntervencion Int                  @map("numero_intervencion")
+  /// CLAVE 1 — hora de aviso al UCO. Excel: "19:10:00".
+  horaAviso          DateTime?            @map("hora_aviso")
+  /// CLAVE 2 — hora de llegada de la dotación al paciente.
+  horaLlegada        DateTime?            @map("hora_llegada")
+  horaFinal          DateTime?            @map("hora_final")
+  /// Equipo principal que atiende. Campo ACTIVO del Excel UCO.
+  dotacionActivaId   Int                  @map("dotacion_activa_id")
+  /// Equipo de apoyo. MVP: 1 equipo. Post-MVP: tabla IntervencionApoyo.
+  dotacionApoyoId    Int?                 @map("dotacion_apoyo_id")
+  /// FK al catálogo Sintomatologia. ADMIN gestiona entradas.
+  sintomatologiaId   Int                  @map("sintomatologia_id")
+  gravedad           GravedadIntervencion @default(LEVE)
+  /// Ubicación del incidente. Ej: "P11", "S102". Campo LUGAR del Excel.
+  lugar              String?              @db.VarChar(100)
+  altaEnLugar        Boolean              @default(false) @map("alta_en_lugar")
+  trasladoClinica    Boolean              @default(false) @map("traslado_clinica")
+  /// FK a Posicion tipo CLINICA. Excel: "CLINICA2", "CLINICA3".
+  clinicaDestinoId   Int?                 @map("clinica_destino_id")
+  altaEnClinica      Boolean              @default(false) @map("alta_en_clinica")
+  trasladoHospital   Boolean              @default(false) @map("traslado_hospital")
+  /// Nombre libre del hospital destino (catálogo externo). Ej: "La Paz".
+  hospitalDestino    String?              @map("hospital_destino") @db.VarChar(150)
+  /// Dotación que realiza el traslado. Campo EQUIPO DE TRASLADO del Excel.
+  dotacionTrasladoId Int?                 @map("dotacion_traslado_id")
+  /// UCO que registra. Campo UCO del Excel.
+  usuarioUcoId       Int?                 @map("usuario_uco_id")
+  /// Escape hatch: texto libre si el síntoma no está en el catálogo.
+  observaciones      String?              @db.Text
+  /// Nº parte externo (SUMMA 112 u otro). Campo PARTE del Excel.
+  parte              String?              @db.VarChar(50)
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+
+  // Relations
+  evento            Evento          @relation(fields: [eventoId], references: [id])
+  sintomatologia    Sintomatologia  @relation(fields: [sintomatologiaId], references: [id])
+  dotacionActiva    Dotacion        @relation("DotacionActiva", fields: [dotacionActivaId], references: [id])
+  dotacionApoyo     Dotacion?       @relation("DotacionApoyo", fields: [dotacionApoyoId], references: [id])
+  dotacionTraslado  Dotacion?       @relation("DotacionTraslado", fields: [dotacionTrasladoId], references: [id])
+  clinicaDestino    Posicion?       @relation("ClinicaDestino", fields: [clinicaDestinoId], references: [id])
+  usuarioUco        UsuarioSistema? @relation("IntervencionUCO", fields: [usuarioUcoId], references: [id])
+
+  @@unique([eventoId, numeroIntervencion])
+  @@index([eventoId])
+  @@index([dotacionActivaId])
+  @@index([sintomatologiaId])
+  @@index([createdAt])
+  @@map("intervencion")
+}
+
+// =============================================================================
+// 8. WALKIE  [MVP ⭐⭐]
+// Inventario físico de walkies-talkies.
+// Separado de Dotacion: ambulancias y camillas pueden tener 2+ walkies.
+// =============================================================================
+
+model Walkie {
+  id            Int          @id @default(autoincrement())
+  /// Número físico grabado en el aparato. Ej: "01", "02", "UCO1", "LIMA".
+  numero        String       @unique @db.VarChar(20)
+  estado        EstadoWalkie @default(DISPONIBLE)
+  observaciones String?      @db.VarChar(300)
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  // Relations
+  asignaciones  AsignacionWalkie[]
+
+  @@map("walkie")
+}
+
+// =============================================================================
+// 9. ASIGNACION_WALKIE  [MVP ⭐⭐]
+// N walkies por dotación por evento. Controla devolución al finalizar.
+// =============================================================================
+
+model AsignacionWalkie {
+  id              Int       @id @default(autoincrement())
+  walkieId        Int       @map("walkie_id")
+  dotacionId      Int       @map("dotacion_id")
+  eventoId        Int       @map("evento_id")
+  fechaAsignacion DateTime  @default(now()) @map("fecha_asignacion")
+  fechaDevolucion DateTime? @map("fecha_devolucion")
+  devuelto        Boolean   @default(false)
+
+  // Relations
+  walkie   Walkie   @relation(fields: [walkieId], references: [id])
+  dotacion Dotacion @relation(fields: [dotacionId], references: [id])
+  evento   Evento   @relation(fields: [eventoId], references: [id])
+
+  @@unique([walkieId, eventoId])
+  @@index([dotacionId, eventoId])
+  @@map("asignacion_walkie")
+}
+
+// =============================================================================
+// 10. MATERIAL  [MVP ⭐⭐⭐]
+// Inventario general. Mórficos, monitores, ampularios marcar esCritico=true.
+// Trazabilidad almacén: "Clavero 2911 cajetín 9540 (base) 2950".
+// =============================================================================
+
+model Material {
+  id               Int          @id @default(autoincrement())
+  /// Código interno. Ej: "MAT-001". Distinto del código de almacén físico.
+  codigo           String       @unique @db.VarChar(50)
+  nombre           String       @db.VarChar(200)
+  tipo             TipoMaterial
+  unidadMedida     String       @default("unidades") @map("unidad_medida") @db.VarChar(30)
+  stockActual      Int          @default(0) @map("stock_actual")
+  stockMinimo      Int          @default(0) @map("stock_minimo")
+  precioUnitario   Decimal?     @map("precio_unitario") @db.Decimal(10, 2)
+  codigoAlmacen    String?      @map("codigo_almacen") @db.VarChar(100)
+  ubicacionAlmacen String?      @map("ubicacion_almacen") @db.VarChar(100)
+  referenciaBase   String?      @map("referencia_base") @db.VarChar(50)
+  proveedor        String?      @db.VarChar(200)
+  fechaCaducidad   DateTime?    @map("fecha_caducidad") @db.Date
+  lote             String?      @db.VarChar(100)
+  esCritico        Boolean      @default(false) @map("es_critico")
+  activo           Boolean      @default(true)
+  observaciones    String?      @db.Text
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  asignacionesPosicion AsignacionMaterialPosicion[] @relation("AsignacionPorMaterial")
+  detallesRevision     DetalleRevisionMaterial[]
+  alertas              AlertaMaterial[]
+
+  @@index([tipo])
+  @@index([fechaCaducidad])
+  @@index([esCritico])
+  @@map("material")
+}
+
+// =============================================================================
+// 11. ASIGNACION_MATERIAL_POSICION  [MVP ⭐⭐⭐]
+// Template: qué material debe tener cada posición (cargado al escanear QR).
+// Regla: posicionId != null → asignación específica de evento.
+//        puestoId != null   → template global por tipo de puesto.
+//        Nunca ambos null.
+// =============================================================================
+
+model AsignacionMaterialPosicion {
+  id               Int     @id @default(autoincrement())
+  posicionId       Int?    @map("posicion_id")
+  materialId       Int     @map("material_id")
+  cantidadEsperada Int     @map("cantidad_esperada")
+  esObligatorio    Boolean @default(true) @map("es_obligatorio")
+  /// FK al catálogo Puesto para templates globales (cuando posicionId = NULL).
+  puestoId         Int?    @map("puesto_id")
+
+  // Relations
+  posicion  Posicion? @relation("AsignacionPorPosicion", fields: [posicionId], references: [id])
+  material  Material  @relation("AsignacionPorMaterial", fields: [materialId], references: [id])
+  puesto    Puesto?   @relation("TemplatePorPuesto", fields: [puestoId], references: [id])
+
+  @@unique([posicionId, materialId])
+  @@index([materialId])
+  @@index([puestoId])
+  @@map("asignacion_material_posicion")
+}
+
+// =============================================================================
+// 12. REVISION_MATERIAL  [MVP ⭐⭐⭐]
+// Cada escaneo QR genera 1 revisión. Reemplaza Forms → copia manual Excel.
+// ~20-28 revisiones por evento (Forms01-Botiquines hasta Forms06-Mecánica).
+// =============================================================================
+
+model RevisionMaterial {
+  id                     Int      @id @default(autoincrement())
+  eventoId               Int      @map("evento_id")
+  posicionId             Int      @map("posicion_id")
+  usuarioId              Int      @map("usuario_id")
+  fechaHora              DateTime @default(now()) @map("fecha_hora")
+  /// Operatividad global de la posición: 0 / 25 / 50 / 75 / 100.
+  porcentajeOperatividad Int      @default(100) @map("porcentaje_operatividad")
+  observaciones          String?  @db.Text
+
+  // Relations
+  evento   Evento                    @relation(fields: [eventoId], references: [id])
+  posicion Posicion                  @relation(fields: [posicionId], references: [id])
+  usuario  UsuarioSistema            @relation(fields: [usuarioId], references: [id])
+  detalles DetalleRevisionMaterial[]
+
+  @@index([eventoId, posicionId])
+  @@index([fechaHora])
+  @@map("revision_material")
+}
+
+// =============================================================================
+// 13. DETALLE_REVISION_MATERIAL  [MVP ⭐⭐⭐]
+// Ítem a ítem de cada revisión QR.
+// Origen: Forms01-Botiquines (~50 ítems), Forms02-Clinicas, Forms03-UVIS, etc.
+// =============================================================================
+
+model DetalleRevisionMaterial {
+  id               Int                @id @default(autoincrement())
+  revisionId       Int                @map("revision_id")
+  materialId       Int                @map("material_id")
+  cantidadEsperada Int                @map("cantidad_esperada")
+  cantidadReal     Int                @map("cantidad_real")
+  estado           EstadoRevisionItem
+  observaciones    String?            @db.VarChar(300)
+
+  // Relations
+  revision  RevisionMaterial @relation(fields: [revisionId], references: [id])
+  material  Material         @relation(fields: [materialId], references: [id])
+
+  @@index([revisionId])
+  @@map("detalle_revision_material")
+}
+
+// =============================================================================
+// 14. ALERTA_MATERIAL  [POST-MVP ⭐]
+// En MVP: sustituir por query directa en dashboard:
+//   WHERE stock_actual < stock_minimo
+//   OR fecha_caducidad < NOW() + INTERVAL '30 days'
+// Implementar esta tabla en fase 3 si el volumen lo requiere.
+// =============================================================================
+
+model AlertaMaterial {
+  id                Int        @id @default(autoincrement())
+  materialId        Int        @map("material_id")
+  tipoAlerta        TipoAlerta @map("tipo_alerta")
+  descripcion       String?    @db.VarChar(300)
+  fechaGenerada     DateTime   @default(now()) @map("fecha_generada")
+  resuelta          Boolean    @default(false)
+  fechaResolucion   DateTime?  @map("fecha_resolucion")
+  usuarioResuelveId Int?       @map("usuario_resuelve_id")
+
+  // Relations
+  material Material @relation(fields: [materialId], references: [id])
+
+  @@index([materialId, resuelta])
+  @@map("alerta_material")
+}
+
+// =============================================================================
+// 15. ESTADO_DOTACION_LOG  [POST-MVP ⭐]
+// Auditoría histórica de cambios de estado (para replay del Cuadro de Mando).
+// En MVP: el estado actual vive en Dotacion.estado. Es suficiente.
+// =============================================================================
+
+model EstadoDotacionLog {
+  id              Int            @id @default(autoincrement())
+  dotacionId      Int            @map("dotacion_id")
+  estadoAnterior  EstadoDotacion @map("estado_anterior")
+  estadoNuevo     EstadoDotacion @map("estado_nuevo")
+  fechaHoraCambio DateTime       @default(now()) @map("fecha_hora_cambio")
+  motivo          String?        @db.VarChar(300)
+  usuarioId       Int?           @map("usuario_id")
+
+  // Relations
+  dotacion Dotacion        @relation(fields: [dotacionId], references: [id])
+  usuario  UsuarioSistema? @relation(fields: [usuarioId], references: [id])
+
+  @@index([dotacionId])
+  @@map("estado_dotacion_log")
+}
+
+// =============================================================================
+// [VISTA SQL] comprobacion_evento — DECISIÓN #3 CONFIRMADA
+// No es un modelo Prisma. Crear con prisma migrate via SQL raw en la migración.
+// Uso en Next.js: prisma.$queryRaw`SELECT * FROM comprobacion_evento
+//                                  WHERE evento_id = ${id}`
+//
+// CREATE OR REPLACE VIEW comprobacion_evento AS
+// SELECT
+//   e.id                                        AS evento_id,
+//   e.nombre                                    AS evento_nombre,
+//
+//   -- 1. Revisiones pendientes (posiciones sin RevisionMaterial completada)
+//   (SELECT COUNT(*)
+//    FROM posicion p
+//    WHERE p.evento_id = e.id
+//      AND NOT EXISTS (
+//        SELECT 1 FROM revision_material rm
+//        WHERE rm.posicion_id = p.id AND rm.evento_id = e.id
+//      )
+//   )                                           AS revisiones_pendientes,
+//
+//   -- 2. Walkies no devueltos
+//   (SELECT COUNT(*)
+//    FROM asignacion_walkie aw
+//    WHERE aw.evento_id = e.id AND aw.devuelto = false
+//   )                                           AS walkies_no_devueltos,
+//
+//   -- 3. Dotaciones con personal por debajo del mínimo
+//   (SELECT COUNT(*)
+//    FROM dotacion d
+//    WHERE d.evento_id = e.id
+//      AND (
+//        SELECT COUNT(*) FROM asignacion_personal_dotacion apd
+//        WHERE apd.dotacion_id = d.id AND apd.asiste = true
+//      ) < d.personal_minimo
+//   )                                           AS dotaciones_sin_personal_completo,
+//
+//   -- 4. Intervenciones sin cerrar (hora_final IS NULL)
+//   (SELECT COUNT(*)
+//    FROM intervencion i
+//    WHERE i.evento_id = e.id AND i.hora_final IS NULL
+//   )                                           AS intervenciones_sin_cerrar,
+//
+//   -- 5. Personal con turno previsto pasado pero sin turno real registrado
+//   (SELECT COUNT(*)
+//    FROM asignacion_personal_dotacion apd
+//    JOIN dotacion d ON d.id = apd.dotacion_id
+//    WHERE d.evento_id = e.id
+//      AND apd.turno_inicio_prev < NOW()
+//      AND apd.turno_inicio_real IS NULL
+//   )                                           AS personal_sin_turno_real
+//
+// FROM evento e
+// WHERE e.deleted_at IS NULL;
+// =============================================================================
