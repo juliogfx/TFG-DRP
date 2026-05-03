@@ -37,7 +37,6 @@ Aplicación web para la gestión integral de Dispositivos de Riesgos Previsibles
 - **Frontend:** Vercel (free tier)
 - **Database:** Supabase (free tier)
 - **Control de versiones:** GitHub
-- **Asistente de código:** GitHub Copilot Chat
 
 ---
 
@@ -68,7 +67,6 @@ TFG-DRP/
 ├── public/               # Archivos estáticos
 ├── types/                # Tipos TypeScript
 ├── prisma.config.ts      # Configuración Prisma 7
-├── CLAUDE.md             # Contexto para asistentes IA
 └── README.md
 ```
 
@@ -138,11 +136,28 @@ La aplicación estará disponible en `http://localhost:3000`
 
 ---
 
+## 🧑‍💻 Guía de Desarrollo
+
+### Convenciones del proyecto
+- Componentes en `/app/components/`
+- API routes en `/app/api/`
+- Funciones de base de datos en `/lib/db/`
+- Tipos TypeScript en `/types/`
+
+### Schema de base de datos
+Ver `prisma/schema.prisma` — v3, 19 modelos, 40 relaciones.
+Migración inicial aplicada: `20260503221121_init`
+
+### MVP — Entrega 2 (13 mayo 2026)
+1. Gestión de eventos DRP
+2. Gestión de dotaciones y asignación de personal
+3. Dashboard UCO básico
+
+---
+
 ## 📚 Documentación
 
-- [Setup del entorno de desarrollo](./docs/SETUP_ENTORNO_DEV.md)
 - [Schema de Base de Datos](./prisma/schema.prisma)
-- [Contexto del proyecto para IA](./CLAUDE.md)
 
 ---
 
