@@ -10,7 +10,7 @@ Convocatoria: Julio 2026
 
 ## 📋 Descripción
 
-Aplicación web progresiva (PWA) para la gestión integral de Dispositivos de Riesgos Previsibles en eventos multitudinarios. El sistema sustituye el modelo actual basado en hojas de cálculo Excel por una solución digital integrada, ofreciendo:
+Aplicación web para la gestión integral de Dispositivos de Riesgos Previsibles en eventos multitudinarios. El sistema sustituye el modelo actual basado en hojas de cálculo Excel por una solución digital integrada, ofreciendo:
 
 - 📊 Gestión centralizada de eventos y recursos
 - 👥 Asignación y seguimiento de personal sanitario
@@ -27,26 +27,25 @@ Aplicación web progresiva (PWA) para la gestión integral de Dispositivos de Ri
 - **Framework:** [Next.js 14](https://nextjs.org/) (App Router)
 - **Lenguaje:** TypeScript
 - **Styling:** Tailwind CSS
-- **PWA:** next-pwa
 
 ### Base de Datos
 - **Motor:** PostgreSQL
-- **ORM:** Prisma
-- **Hosting:** Supabase
+- **ORM:** Prisma 7
+- **Hosting:** Supabase (región eu-west-1 — Irlanda)
 
 ### Deploy & CI/CD
-- **Frontend:** Vercel
-- **Database:** Supabase
+- **Frontend:** Vercel (free tier)
+- **Database:** Supabase (free tier)
 - **Control de versiones:** GitHub
-- **CI/CD:** GitHub Actions
+- **Asistente de código:** GitHub Copilot Chat
 
 ---
 
 ## 🚀 Estado del Proyecto
 
 - ✅ **Capítulo 2 (Contexto y Estado del Arte):** Completado (8 abril 2026)
-- 🔄 **Capítulo 3 (Objetivos y Metodología):** En progreso
-- ⏳ **Capítulo 4 (Desarrollo):** Pendiente
+- ✅ **Capítulo 3 (Objetivos y Metodología):** Completado (3 mayo 2026)
+- 🔄 **Capítulo 4 (Desarrollo):** En progreso
 - ⏳ **Capítulo 5 (Resultados):** Pendiente
 - ⏳ **Capítulo 6 (Conclusiones):** Pendiente
 
@@ -58,17 +57,18 @@ Aplicación web progresiva (PWA) para la gestión integral de Dispositivos de Ri
 
 ```
 TFG-DRP/
-├── docs/              # Documentación técnica
-│   ├── arquitectura.md
-│   ├── requisitos.md
-│   └── base-datos.md
-├── src/
-│   ├── app/          # Next.js App Router
-│   ├── components/   # Componentes React
-│   ├── lib/          # Utilidades y helpers
-│   └── prisma/       # Schema y migraciones
-├── tests/            # Tests unitarios y E2E
-├── public/           # Archivos estáticos
+├── app/                  # Next.js App Router
+│   ├── api/              # API Routes
+│   └── components/       # Componentes React
+├── lib/                  # Utilidades y helpers
+│   └── db/               # Funciones de base de datos
+├── prisma/
+│   ├── schema.prisma     # Schema BD v3 (19 modelos, 40 relaciones)
+│   └── migrations/       # Migraciones aplicadas
+├── public/               # Archivos estáticos
+├── types/                # Tipos TypeScript
+├── prisma.config.ts      # Configuración Prisma 7
+├── CLAUDE.md             # Contexto para asistentes IA
 └── README.md
 ```
 
@@ -79,27 +79,27 @@ TFG-DRP/
 ### Módulo 1: Gestión de Eventos
 - Crear y configurar eventos DRP
 - Asignar ubicación, fecha y aforo
-- Dimensionamiento automático de recursos
+- Dimensionamiento de recursos
 
 ### Módulo 2: Gestión de Personal
 - CRUD completo de personal sanitario
-- Asignación a eventos
-- Control de disponibilidad
+- Asignación a dotaciones por evento
+- Control de disponibilidad y turnos
 
 ### Módulo 3: Gestión de Material
 - Inventario de equipamiento médico
-- Control de stock
-- Alertas de reposición
+- Control de stock con alertas de caducidad
+- Revisión por escaneo QR
 
-### Módulo 4: Registro de Intervenciones
+### Módulo 4: Registro de Intervenciones (UCO)
 - Captura de datos en tiempo real
 - Clasificación por gravedad
-- Historial médico
+- Trazabilidad completa del episodio
 
 ### Módulo 5: Reporting
-- Estadísticas por evento
-- Reportes automáticos
-- Exportación PDF/Excel
+- Estadísticas por evento y temporada
+- Generación de informes operativos
+- Exportación de datos
 
 ---
 
@@ -108,9 +108,9 @@ TFG-DRP/
 > **Nota:** Este proyecto está en desarrollo activo como parte de un TFG.
 
 ### Prerrequisitos
-- Node.js 18+ 
-- npm o yarn
-- PostgreSQL (o cuenta Supabase)
+- Node.js 24+
+- npm
+- Cuenta Supabase (o PostgreSQL local)
 
 ### Instalación
 
@@ -123,8 +123,9 @@ cd TFG-DRP
 npm install
 
 # Configurar variables de entorno
-cp .env.example .env
-# Editar .env con tus credenciales
+# Crear .env con las credenciales de Supabase:
+# DATABASE_URL=...
+# DIRECT_URL=...
 
 # Ejecutar migraciones
 npx prisma migrate dev
@@ -139,10 +140,9 @@ La aplicación estará disponible en `http://localhost:3000`
 
 ## 📚 Documentación
 
-- [Análisis de Requisitos](./docs/requisitos.md)
-- [Arquitectura del Sistema](./docs/arquitectura.md)
-- [Modelo de Base de Datos](./docs/base-datos.md)
-- [Guía de Contribución](./CONTRIBUTING.md)
+- [Setup del entorno de desarrollo](./docs/SETUP_ENTORNO_DEV.md)
+- [Schema de Base de Datos](./prisma/schema.prisma)
+- [Contexto del proyecto para IA](./CLAUDE.md)
 
 ---
 
@@ -150,8 +150,7 @@ La aplicación estará disponible en `http://localhost:3000`
 
 **Julio García Fernández**  
 Estudiante de Ingeniería Informática - UNIR  
-📧 [email@ejemplo.com](mailto:email@ejemplo.com)  
-🔗 [LinkedIn](https://linkedin.com/in/tu-perfil)
+Director TFG: Luis Pedraza Gomar
 
 ---
 
@@ -164,20 +163,19 @@ Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) par
 ## 🙏 Agradecimientos
 
 - UNIR - Universidad Internacional de La Rioja
-- Director del TFG: [Nombre del Director]
-- Organizaciones colaboradoras: organizaciones de emergencias, SAMUR
-- Usuarios y stakeholders que participaron en las entrevistas
+- Director del TFG: Luis Pedraza Gomar
+- Usuarios reales del sector que participaron en los cuestionarios de validación
 
 ---
 
 ## 📊 Progreso del Desarrollo
 
 ```
-Fase 1: Análisis y Diseño          ████████░░ 80%
-Fase 2: Implementación Backend      ░░░░░░░░░░  0%
-Fase 3: Implementación Frontend     ░░░░░░░░░░  0%
-Fase 4: Testing y Validación        ░░░░░░░░░░  0%
-Fase 5: Documentación               ████░░░░░░ 40%
+Fase 1: Análisis y Diseño           ██████████ 100%
+Fase 2: Implementación Backend      █░░░░░░░░░  10%
+Fase 3: Implementación Frontend     ░░░░░░░░░░   0%
+Fase 4: Testing y Validación        ░░░░░░░░░░   0%
+Fase 5: Documentación               ██████░░░░  60%
 ```
 
 ---
@@ -186,16 +184,17 @@ Fase 5: Documentación               ████░░░░░░ 40%
 
 - [x] Investigación y Estado del Arte
 - [x] Definición de requisitos
-- [ ] Diseño de base de datos
+- [x] Diseño de base de datos (schema v3 — 19 modelos)
+- [x] Setup entorno (Next.js 14 + Prisma 7 + Supabase + Vercel)
 - [ ] Implementación módulo gestión eventos
-- [ ] Implementación módulo gestión personal
-- [ ] Implementación módulo intervenciones
+- [ ] Implementación módulo gestión personal y dotaciones
+- [ ] Implementación módulo intervenciones (UCO)
 - [ ] Sistema de autenticación y roles
 - [ ] Dashboard y reportes
-- [ ] Testing completo
+- [ ] Testing y validación con usuarios reales
 - [ ] Despliegue en producción
 - [ ] Defensa TFG
 
 ---
 
-**Última actualización:** Abril 2026
+**Última actualización:** Mayo 2026
