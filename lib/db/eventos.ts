@@ -88,7 +88,7 @@ export async function getEventoById(id: number): Promise<EventoDetalle | null> {
     horaFinalizacionSspp: evento.horaFinalizacionSspp?.toISOString() ?? null,
     createdAt: evento.createdAt.toISOString(),
     updatedAt: evento.updatedAt.toISOString(),
-    dotaciones: evento.dotaciones.map((d) => ({
+    dotaciones: evento.dotaciones.map((d: (typeof evento.dotaciones)[number]) => ({
       ...d,
       tipo: d.tipo as string,
       estado: d.estado as string,
