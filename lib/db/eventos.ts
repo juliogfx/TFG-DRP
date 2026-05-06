@@ -44,7 +44,7 @@ export async function getEventos(): Promise<EventoListItem[]> {
     orderBy: { fecha: 'desc' },
   });
 
-  return eventos.map((e) => ({
+  return eventos.map((e: (typeof eventos)[number]) => ({
     ...e,
     fecha: e.fecha.toISOString().split('T')[0],
     numeroDotaciones: e.dotaciones.length,
