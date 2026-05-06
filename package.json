@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "docs": "typedoc --entryPoints lib/db --entryPoints types --entryPointStrategy expand --out docs/api"
+    "docs": "typedoc --entryPoints lib/db --entryPoints types --entryPointStrategy expand --out docs/api",
+    "postinstall": "prisma generate"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
