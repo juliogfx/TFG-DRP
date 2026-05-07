@@ -72,10 +72,10 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-50 text-slate-900`}
       >
         <div className="flex min-h-screen">
-          <aside className="fixed inset-y-0 left-0 w-64 bg-slate-900 text-slate-100 px-6 py-8 flex flex-col">
+          <aside className="fixed inset-y-0 left-0 w-64 bg-slate-700 text-slate-100 px-6 py-8 flex flex-col">
             <div className="mb-10">
               <h1 className="text-xl font-semibold tracking-tight">TFG-DRP</h1>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-300 mt-1">
                 Dispositivos de Riesgos Previsibles
               </p>
             </div>
@@ -85,11 +85,11 @@ export default function RootLayout({
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="block rounded-md px-3 py-2 hover:bg-slate-800 transition-colors"
+                  className="block rounded-md px-3 py-2 hover:bg-slate-600 transition-colors"
                 >
                   <span className="block text-sm font-medium">{item.label}</span>
                   {item.hint && (
-                    <span className="block text-xs text-slate-400">
+                    <span className="block text-xs text-slate-300">
                       {item.hint}
                     </span>
                   )}
@@ -97,7 +97,7 @@ export default function RootLayout({
               ))}
             </nav>
 
-            <footer className="text-xs text-slate-500 pt-4 border-t border-slate-800">
+            <footer className="text-xs text-slate-500 pt-4 border-t border-slate-600">
               v4.1 · 2026
             </footer>
           </aside>

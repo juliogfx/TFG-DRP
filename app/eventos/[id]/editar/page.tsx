@@ -114,6 +114,7 @@ export default function EditarEventoPage() {
 
   const promotores = empresas.filter((e) => e.tipo === 'PROMOTOR');
   const contratadas = empresas.filter((e) => e.tipo === 'CONTRATADA' || e.tipo === 'FACULTATIVOS');
+  const esConcierto = tiposEvento.find((t) => t.id === form.tipoEventoId)?.codigo === 'CON';
 
   if (cargando) return <div className="text-center py-12 text-slate-500">Cargando evento...</div>;
 
@@ -185,9 +186,9 @@ export default function EditarEventoPage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Rival</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">{esConcierto ? 'Artista / Grupo' : 'Rival'}</label>
             <input type="text" value={form.rival ?? ''} onChange={(e) => actualizarCampo('rival', e.target.value)}
-              placeholder="Ej: Atlético de Madrid"
+              placeholder={esConcierto ? 'Ej: Bad Bunny, Taylor Swift...' : 'Ej: Atlético de Madrid'}
               className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
         </div>
