@@ -228,7 +228,7 @@ export default function UCOPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-4 gap-4 mb-2">
             <div className="bg-white border border-slate-200 rounded-lg p-4 text-center">
               <p className="text-3xl font-bold text-slate-900">{estadoUCO.contadores.totalIntervenciones}</p>
               <p className="text-xs text-slate-500 mt-1">Intervenciones</p>
@@ -246,6 +246,11 @@ export default function UCOPage() {
               <p className="text-xs text-slate-500 mt-1">Traslados hospital</p>
             </div>
           </div>
+          <p className="text-xs text-slate-400 mb-8">
+            Los contadores reflejan las intervenciones médicas registradas en el sistema durante el evento.
+            El estado operativo de las dotaciones (disponible / en intervención / no operativa)
+            se gestiona desde el módulo Dotaciones.
+          </p>
 
           {estadoUCO.dotaciones.length === 0 ? (
             <div className="text-center py-12 text-slate-400">No hay dotaciones activas para este evento.</div>
