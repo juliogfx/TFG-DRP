@@ -53,7 +53,7 @@ export default function HomePage() {
         <p className="text-lg text-slate-600 leading-relaxed">
           Sistema de gestión digital para{' '}
           <span className="font-semibold text-slate-800">Dispositivos de Riesgos Previsibles</span>.
-          Coordinación operativa de eventos de concurrencia masiva para Cruz Roja Madrid.
+          Coordinación operativa de eventos de concurrencia masiva.
         </p>
         <div className="mt-4 flex items-center gap-2">
           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -89,10 +89,6 @@ export default function HomePage() {
           <div>
             <p className="font-medium text-slate-700">Base de datos</p>
             <p>Supabase (eu-west-1) · Schema v4.1</p>
-          </div>
-          <div>
-            <p className="font-medium text-slate-700">Metodología</p>
-            <p>SAMUR-Protección Civil · Plan Arán (Arán Ediciones, 2024)</p>
           </div>
           <div>
             <p className="font-medium text-slate-700">Versión</p>

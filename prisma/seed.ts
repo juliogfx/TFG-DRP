@@ -75,16 +75,16 @@ async function main() {
   ]);
   console.log('✓ Ubicaciones creadas');
 
-  const [cruzRoja, realMadrid] = await Promise.all([
+  const [empresaContratada, realMadrid] = await Promise.all([
     prisma.empresa.upsert({
-      where: { codigo: 'CRZ' },
+      where: { codigo: 'ECE' },
       update: {},
       create: {
-        nombre: 'Cruz Roja Española',
-        codigo: 'CRZ',
+        nombre: 'Empresa Contratada Ejemplo',
+        codigo: 'ECE',
         tipo: TipoEmpresa.CONTRATADA,
         telefono: '900 22 11 00',
-        email: 'drp@cruzroja.es',
+        email: 'contacto@empresa-ejemplo.com',
         contacto: 'Coordinación DRP Madrid',
       },
     }),
@@ -192,7 +192,7 @@ async function main() {
       passwordHash,
       nombreCompleto: 'Usuario UCO Test',
       rol: RolUsuario.UCO,
-      empresaId: cruzRoja.id,
+      empresaId: empresaContratada.id,
       activo: true,
     },
   });
@@ -242,7 +242,7 @@ async function main() {
     ubicacionId: bernabeu.id,
     temporada: '2025-26',
     empresaPromotorId: realMadrid.id,
-    empresaContratadaId: cruzRoja.id,
+    empresaContratadaId: empresaContratada.id,
     coordinadorUcoId: usuarioUco.id,
     aforoPrevisto: 81044,
   };
