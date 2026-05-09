@@ -8,6 +8,9 @@
  * Usado por los formularios de Evento para cargar el select de ubicación.
  */
 
+// Forzar renderizado dinámico — estos catálogos pueden cambiar sin redeploy
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 

@@ -6,6 +6,9 @@
  *   GET /api/personal → Lista todo el personal activo disponible
  */
 
+// Forzar renderizado dinámico — estos catálogos pueden cambiar sin redeploy
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import { getPersonalDisponible } from '@/lib/db/dotaciones';
 import type { ApiResponse, ApiError, PersonaListItem } from '@/types/dotacion';
