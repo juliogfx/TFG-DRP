@@ -1,7 +1,13 @@
 // =============================================================================
-// schema.prisma — TFG-DRP  v4.1
+// schema.prisma — TFG-DRP  v4.2
 // Sistema de Gestión de Dispositivos de Riesgos Previsibles
 // Stack: Next.js 14 + TypeScript + Prisma 7 + Supabase (PostgreSQL)
+//
+// CHANGELOG v4.2 (09-may-2026):
+//   + Tabla EquipoCatalogo — catálogo de equipos deportivos
+//   + Campo Evento.equipoLocalId FK → EquipoCatalogo
+//   + Campo Evento.equipoVisitanteId FK → EquipoCatalogo
+//   ~ Campo rival se mantiene en BD, oculto en UI (Opción B post-TFG)
 //
 // CHANGELOG v4.1 (04-may-2026):
 //   ~ Corregidas relaciones entre PlantillaEvento y Evento

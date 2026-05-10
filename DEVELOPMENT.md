@@ -12,7 +12,7 @@
 - DIRECT_URL → conexión directa puerto 5432 (migraciones/seed)
 
 ## Base de datos
-- Schema v4.1 + migración add_equipo_catalogo — 24 modelos, 3 migraciones aplicadas
+- Schema v4.2 — 24 modelos, 3 migraciones aplicadas
 - Snake_case via @@map/@map — no modificar los mapeos
 - Soft-delete via deletedAt en Evento y Dotacion — filtrar siempre deletedAt: null
 - Codigos cortos VarChar en Empresa (5), TipoEventoCatalogo (3), Ubicacion (3), EquipoCatalogo (5)
