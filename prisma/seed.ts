@@ -182,6 +182,42 @@ async function main() {
   }
   console.log('✓ Sintomatologías creadas');
 
+  // -------------------------------------------------------------------------
+  // CATÁLOGO DE EQUIPOS DEPORTIVOS
+  // Equipos para seleccionar en eventos deportivos en lugar de texto libre.
+  // -------------------------------------------------------------------------
+
+  const equipos = [
+    // Fútbol - LaLiga
+    { codigo: 'RMD', nombre: 'Real Madrid C.F.',      deporte: 'Fútbol - LaLiga' },
+    { codigo: 'ATM', nombre: 'Atlético de Madrid',    deporte: 'Fútbol - LaLiga' },
+    { codigo: 'FCB', nombre: 'FC Barcelona',          deporte: 'Fútbol - LaLiga' },
+    { codigo: 'SEV', nombre: 'Sevilla F.C.',          deporte: 'Fútbol - LaLiga' },
+    { codigo: 'VAL', nombre: 'Valencia C.F.',         deporte: 'Fútbol - LaLiga' },
+    { codigo: 'BET', nombre: 'Real Betis',            deporte: 'Fútbol - LaLiga' },
+    // Fútbol - Champions/Europa
+    { codigo: 'BAY', nombre: 'Bayern München',        deporte: 'Fútbol - Europa' },
+    { codigo: 'PSG', nombre: 'Paris Saint-Germain',   deporte: 'Fútbol - Europa' },
+    { codigo: 'MCI', nombre: 'Manchester City',       deporte: 'Fútbol - Europa' },
+    { codigo: 'LIV', nombre: 'Liverpool F.C.',        deporte: 'Fútbol - Europa' },
+    { codigo: 'JUV', nombre: 'Juventus F.C.',         deporte: 'Fútbol - Europa' },
+    // Fútbol - Selecciones
+    { codigo: 'SEF', nombre: 'Selección Española Fútbol', deporte: 'Fútbol - Selecciones' },
+    // Baloncesto
+    { codigo: 'RMB', nombre: 'Real Madrid Baloncesto', deporte: 'Baloncesto' },
+    { codigo: 'BAR', nombre: 'FC Barcelona Bàsquet',  deporte: 'Baloncesto' },
+    { codigo: 'UNI', nombre: 'Valencia Basket',       deporte: 'Baloncesto' },
+  ];
+
+  for (const eq of equipos) {
+    await prisma.equipoCatalogo.upsert({
+      where: { codigo: eq.codigo },
+      update: {},
+      create: { ...eq, activo: true },
+    });
+  }
+  console.log('✓ Equipos deportivos creados');
+
   const passwordHash = await bcrypt.hash('drp2026test', 10);
 
   const usuarioUco = await prisma.usuarioSistema.upsert({

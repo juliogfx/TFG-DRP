@@ -19,6 +19,7 @@ const ubicacionSelect = { id: true, nombre: true, codigo: true } as const;
 const ubicacionDetalleSelect = { id: true, nombre: true, codigo: true, direccion: true, aforoMaximo: true } as const;
 const tipoEventoSelect = { id: true, nombre: true, codigo: true } as const;
 const empresaSelect = { id: true, nombre: true, codigo: true } as const;
+const equipoSelect = { id: true, nombre: true, codigo: true, deporte: true } as const;
 
 /**
  * Obtiene la lista de todos los eventos activos (no eliminados).
@@ -71,6 +72,8 @@ export async function getEventoById(id: number): Promise<EventoDetalle | null> {
       tipoEvento: { select: tipoEventoSelect },
       empresaPromotor: { select: empresaSelect },
       empresaContratada: { select: empresaSelect },
+      equipoLocal: { select: equipoSelect },
+      equipoVisitante: { select: equipoSelect },
       dotaciones: {
         where: { deletedAt: null },
         select: { id: true, codigo: true, tipo: true, estado: true, personalMinimo: true },
@@ -88,6 +91,8 @@ export async function getEventoById(id: number): Promise<EventoDetalle | null> {
     horaFinalizacionSspp: evento.horaFinalizacionSspp?.toISOString() ?? null,
     createdAt: evento.createdAt.toISOString(),
     updatedAt: evento.updatedAt.toISOString(),
+    equipoLocal: evento.equipoLocal ?? null,
+    equipoVisitante: evento.equipoVisitante ?? null,
     dotaciones: evento.dotaciones.map((d: (typeof evento.dotaciones)[number]) => ({
       ...d,
       tipo: d.tipo as string,
@@ -115,6 +120,8 @@ export async function createEvento(input: CreateEventoInput): Promise<EventoDeta
       temporada: input.temporada ?? null,
       empresaPromotorId: input.empresaPromotorId ?? null,
       empresaContratadaId: input.empresaContratadaId ?? null,
+      equipoLocalId: input.equipoLocalId ?? null,
+      equipoVisitanteId: input.equipoVisitanteId ?? null,
       directorMedico: input.directorMedico ?? null,
       observaciones: input.observaciones ?? null,
     },
@@ -148,6 +155,8 @@ export async function updateEvento(id: number, input: UpdateEventoInput): Promis
       ...(input.temporada !== undefined && { temporada: input.temporada }),
       ...(input.empresaPromotorId !== undefined && { empresaPromotorId: input.empresaPromotorId }),
       ...(input.empresaContratadaId !== undefined && { empresaContratadaId: input.empresaContratadaId }),
+      ...(input.equipoLocalId !== undefined && { equipoLocalId: input.equipoLocalId }),
+      ...(input.equipoVisitanteId !== undefined && { equipoVisitanteId: input.equipoVisitanteId }),
       ...(input.directorMedico !== undefined && { directorMedico: input.directorMedico }),
       ...(input.observaciones !== undefined && { observaciones: input.observaciones }),
       ...(input.horaIncorporacionSspp !== undefined && { horaIncorporacionSspp: new Date(input.horaIncorporacionSspp) }),

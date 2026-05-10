@@ -307,6 +307,8 @@ model Evento {
   fecha                 DateTime  @db.Date
   tipoEventoId          Int?      @map("tipo_evento_id")
   rival                 String?   @db.VarChar(200)
+  equipoLocalId     Int?    @map("equipo_local_id")
+  equipoVisitanteId Int?    @map("equipo_visitante_id")
   aforoPrevisto         Int?      @map("aforo_previsto")
   aforoEstimado         Int?      @map("aforo_estimado")
   contratoId            Int?      @map("contrato_id")
@@ -334,6 +336,8 @@ model Evento {
   tipoEvento         TipoEventoCatalogo? @relation(fields: [tipoEventoId], references: [id])
   empresaPromotor    Empresa?            @relation("EventoPromotor", fields: [empresaPromotorId], references: [id])
   empresaContratada  Empresa?            @relation("EventoContratada", fields: [empresaContratadaId], references: [id])
+  equipoLocal       EquipoCatalogo? @relation("EventoLocal",     fields: [equipoLocalId],     references: [id])
+  equipoVisitante   EquipoCatalogo? @relation("EventoVisitante", fields: [equipoVisitanteId], references: [id])
   /// Plantilla de origen (Opción B)
   plantillaOrigen    PlantillaEvento?    @relation("EventoDesdePlantilla", fields: [plantillaOrigenId], references: [id])
   /// Evento del que se clonó (Opción A) — auto-relación
@@ -686,4 +690,22 @@ model EstadoDotacionLog {
 
   @@index([dotacionId])
   @@map("estado_dotacion_log")
+}
+
+/// Catálogo de equipos deportivos para eventos con participantes conocidos.
+/// Permite seleccionar equipo local y visitante en lugar de texto libre (rival).
+/// El campo rival se mantiene en Evento para compatibilidad con datos históricos.
+model EquipoCatalogo {
+  id      Int     @id @default(autoincrement())
+  nombre  String  @db.VarChar(200)
+  codigo  String  @unique @db.VarChar(5)
+  deporte String  @db.VarChar(50)
+  activo  Boolean @default(true)
+
+  eventosComoLocal     Evento[] @relation("EventoLocal")
+  eventosComoVisitante Evento[] @relation("EventoVisitante")
+
+  @@index([deporte])
+  @@index([activo])
+  @@map("equipo_catalogo")
 }

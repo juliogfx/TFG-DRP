@@ -34,6 +34,8 @@ export interface EventoDetalle {
   temporada: string | null;
   empresaPromotor: { id: number; nombre: string; codigo: string; } | null;
   empresaContratada: { id: number; nombre: string; codigo: string; } | null;
+  equipoLocal: EquipoCatalogoItem | null;
+  equipoVisitante: EquipoCatalogoItem | null;
   directorMedico: string | null;
   observaciones: string | null;
   horaIncorporacionSspp: string | null;
@@ -53,6 +55,10 @@ export interface CreateEventoInput {
   temporada?: string;
   empresaPromotorId?: number;
   empresaContratadaId?: number;
+  /** ID del equipo local (anfitrión) — solo para eventos deportivos */
+  equipoLocalId?: number;
+  /** ID del equipo visitante — solo para eventos deportivos */
+  equipoVisitanteId?: number;
   directorMedico?: string;
   observaciones?: string;
 }
@@ -68,6 +74,8 @@ export interface UpdateEventoInput {
   temporada?: string;
   empresaPromotorId?: number;
   empresaContratadaId?: number;
+  equipoLocalId?: number;
+  equipoVisitanteId?: number;
   directorMedico?: string;
   observaciones?: string;
   horaIncorporacionSspp?: string;
@@ -82,4 +90,14 @@ export interface ApiResponse<T> {
 export interface ApiError {
   error: string;
   detail?: string;
+}
+
+/**
+ * Equipo deportivo del catálogo para selects en formularios de eventos deportivos.
+ */
+export interface EquipoCatalogoItem {
+  id: number;
+  nombre: string;
+  codigo: string;
+  deporte: string;
 }

@@ -18,6 +18,7 @@ import type { UpdateEventoInput, EventoDetalle } from '@/types/evento';
 
 interface OpcionCatalogo { id: number; nombre: string; codigo: string; }
 interface OpcionEmpresa extends OpcionCatalogo { tipo: 'PROMOTOR' | 'CONTRATADA' | 'FACULTATIVOS'; }
+interface OpcionEquipo { id: number; nombre: string; codigo: string; deporte: string; }
 
 export default function EditarEventoPage() {
   const router = useRouter();
@@ -28,6 +29,7 @@ export default function EditarEventoPage() {
   const [ubicaciones, setUbicaciones] = useState<OpcionCatalogo[]>([]);
   const [tiposEvento, setTiposEvento] = useState<OpcionCatalogo[]>([]);
   const [empresas, setEmpresas] = useState<OpcionEmpresa[]>([]);
+  const [equipos, setEquipos] = useState<OpcionEquipo[]>([]);
   const [cargando, setCargando] = useState(true);
   const [noEncontrado, setNoEncontrado] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,18 +40,19 @@ export default function EditarEventoPage() {
 
     async function cargarDatos() {
       try {
-        const [resEvento, resUbic, resTipos, resEmpresas] = await Promise.all([
+        const [resEvento, resUbic, resTipos, resEmpresas, resEquipos] = await Promise.all([
           fetch(`/api/eventos/${eventoId}`),
           fetch('/api/ubicaciones'),
           fetch('/api/tipos-evento'),
           fetch('/api/empresas'),
+          fetch('/api/equipos'),
         ]);
 
         if (resEvento.status === 404) { setNoEncontrado(true); return; }
         if (!resEvento.ok) throw new Error(`Error ${resEvento.status} al cargar el evento`);
 
-        const [dataEvento, dataUbic, dataTipos, dataEmpresas] = await Promise.all([
-          resEvento.json(), resUbic.json(), resTipos.json(), resEmpresas.json(),
+        const [dataEvento, dataUbic, dataTipos, dataEmpresas, dataEquipos] = await Promise.all([
+          resEvento.json(), resUbic.json(), resTipos.json(), resEmpresas.json(), resEquipos.json(),
         ]);
 
         const evento: EventoDetalle = dataEvento.data;
@@ -64,6 +67,8 @@ export default function EditarEventoPage() {
           temporada: evento.temporada ?? '',
           empresaPromotorId: evento.empresaPromotor?.id ?? undefined,
           empresaContratadaId: evento.empresaContratada?.id ?? undefined,
+          equipoLocalId: evento.equipoLocal?.id ?? undefined,
+          equipoVisitanteId: evento.equipoVisitante?.id ?? undefined,
           directorMedico: evento.directorMedico ?? '',
           observaciones: evento.observaciones ?? '',
         });
@@ -71,6 +76,7 @@ export default function EditarEventoPage() {
         setUbicaciones(dataUbic.data ?? []);
         setTiposEvento(dataTipos.data ?? []);
         setEmpresas(dataEmpresas.data ?? []);
+        setEquipos(dataEquipos.data ?? []);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Error al cargar los datos');
       } finally {
@@ -83,8 +89,7 @@ export default function EditarEventoPage() {
   function actualizarCampo(campo: keyof UpdateEventoInput, valor: string) {
     setForm((prev) => ({
       ...prev,
-      [campo]: ['ubicacionId', 'tipoEventoId', 'aforoPrevisto', 'aforoEstimado',
-        'empresaPromotorId', 'empresaContratadaId'].includes(campo)
+      [campo]: ['ubicacionId', 'tipoEventoId', 'aforoPrevisto', 'aforoEstimado', 'empresaPromotorId', 'empresaContratadaId', 'equipoLocalId', 'equipoVisitanteId'].includes(campo)
         ? (valor === '' ? undefined : Number(valor)) : valor,
     }));
   }
@@ -114,7 +119,94 @@ export default function EditarEventoPage() {
 
   const promotores = empresas.filter((e) => e.tipo === 'PROMOTOR');
   const contratadas = empresas.filter((e) => e.tipo === 'CONTRATADA' || e.tipo === 'FACULTATIVOS');
-  const esConcierto = tiposEvento.find((t) => t.id === form.tipoEventoId)?.codigo === 'CON';
+  const tipoSeleccionado = tiposEvento.find((t) => t.id === form.tipoEventoId);
+  const esConcierto = tipoSeleccionado?.codigo === 'CON';
+
+  /** Evento deportivo: PLA, CHA, COP o nombre con palabras clave deportivas */
+  const esDeportivo = tipoSeleccionado
+    ? ['PLA', 'CHA', 'COP'].includes(tipoSeleccionado.codigo) ||
+      /partido|liga|copa|champions|baloncesto/i.test(tipoSeleccionado.nombre)
+    : false;
+
+  /**
+   * Filtra equipos según el tipo de evento seleccionado.
+   * PLA → solo LaLiga; CHA → LaLiga + Europa + Selecciones;
+   * COP → LaLiga + Selecciones; baloncesto → solo Baloncesto;
+   * resto deportivo → todos los equipos.
+   * @param tipo - TipoEventoCatalogo seleccionado.
+   * @returns Array de equipos filtrados.
+   */
+  function equiposFiltrados(tipo: typeof tipoSeleccionado): typeof equipos {
+    if (!tipo) return equipos;
+    const cod = tipo.codigo;
+    const nom = tipo.nombre.toLowerCase();
+    if (cod === 'PLA') return equipos.filter((e) => e.deporte === 'Fútbol - LaLiga');
+    if (cod === 'CHA') return equipos.filter((e) =>
+      ['Fútbol - LaLiga', 'Fútbol - Europa', 'Fútbol - Selecciones'].includes(e.deporte)
+    );
+    if (cod === 'COP') return equipos.filter((e) =>
+      ['Fútbol - LaLiga', 'Fútbol - Selecciones'].includes(e.deporte)
+    );
+    if (/baloncesto/i.test(nom)) return equipos.filter((e) => e.deporte === 'Baloncesto');
+    return equipos;
+  }
+  const equiposDisponibles = equiposFiltrados(tipoSeleccionado);
+
+  /**
+   * Calcula la temporada deportiva a partir de la fecha y el tipo de evento.
+   * Fútbol: temporada empieza en julio. Baloncesto: en septiembre.
+   * @param fecha - Fecha en formato YYYY-MM-DD.
+   * @param tipo  - TipoEventoCatalogo seleccionado.
+   * @returns String de temporada "YYYY-YY" o vacío si no aplica.
+   */
+  function calcularTemporada(fecha: string, tipo: typeof tipoSeleccionado): string {
+    if (!fecha || !tipo) return '';
+    const d = new Date(fecha + 'T12:00:00');
+    const mes = d.getMonth() + 1;
+    const anyo = d.getFullYear();
+    const cod = tipo.codigo;
+    const nom = tipo.nombre.toLowerCase();
+    const esFutbol = ['PLA', 'CHA', 'COP'].includes(cod) || /partido|liga|copa|champions/i.test(nom);
+    const esBasket = /baloncesto/i.test(nom);
+    if (!esFutbol && !esBasket) return '';
+    const mesInicio = esFutbol ? 7 : 9;
+    const anyoInicio = mes >= mesInicio ? anyo : anyo - 1;
+    const anyoFin = (anyoInicio + 1).toString().slice(-2);
+    return `${anyoInicio}-${anyoFin}`;
+  }
+
+  /**
+   * Construye el nombre sugerido del evento.
+   * Deportivo con ambos equipos: "[Local] vs [Visitante] - DD/MM/YYYY"
+   * No deportivo con artista: "[Artista] - DD/MM/YYYY"
+   * @param localId     - ID del equipo local.
+   * @param visitanteId - ID del equipo visitante.
+   * @param fecha       - Fecha en formato YYYY-MM-DD.
+   * @param rival       - Texto libre del campo Artista/Grupo.
+   * @returns Nombre sugerido o cadena vacía si faltan datos.
+   */
+  function nombreSugerido(
+    localId: number | undefined,
+    visitanteId: number | undefined,
+    fecha: string,
+    rival: string,
+  ): string {
+    const fechaStr = fecha
+      ? new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      : '';
+    if (esDeportivo) {
+      const local = equiposDisponibles.find((e) => e.id === localId);
+      const visitante = equiposDisponibles.find((e) => e.id === visitanteId);
+      if (local && visitante) {
+        return fechaStr
+          ? `${local.nombre} vs ${visitante.nombre} - ${fechaStr}`
+          : `${local.nombre} vs ${visitante.nombre}`;
+      }
+      return '';
+    }
+    if (rival?.trim() && fechaStr) return `${rival.trim()} - ${fechaStr}`;
+    return '';
+  }
 
   if (cargando) return <div className="text-center py-12 text-slate-500">Cargando evento...</div>;
 
@@ -171,27 +263,106 @@ export default function EditarEventoPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Fecha *</label>
-            <input type="date" value={form.fecha ?? ''} onChange={(e) => actualizarCampo('fecha', e.target.value)}
-              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <input
+              type="date"
+              value={form.fecha ?? ''}
+              onChange={(e) => {
+                const fecha = e.target.value;
+                const temporada = calcularTemporada(fecha, tipoSeleccionado);
+                const nombre = nombreSugerido(form.equipoLocalId, form.equipoVisitanteId, fecha, form.rival ?? '');
+                setForm((prev) => ({
+                  ...prev,
+                  fecha,
+                  ...(temporada && { temporada }),
+                  ...(nombre && { nombre }),
+                }));
+              }}
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de evento</label>
-            <select value={form.tipoEventoId ?? ''} onChange={(e) => actualizarCampo('tipoEventoId', e.target.value)}
-              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <select
+              value={form.tipoEventoId ?? ''}
+              onChange={(e) => {
+                const nuevoTipoId = e.target.value ? Number(e.target.value) : undefined;
+                const nuevoTipo = tiposEvento.find((t) => t.id === nuevoTipoId);
+                const temporada = calcularTemporada(form.fecha ?? '', nuevoTipo);
+                setForm((prev) => ({
+                  ...prev,
+                  tipoEventoId: nuevoTipoId,
+                  equipoLocalId: undefined,
+                  equipoVisitanteId: undefined,
+                  rival: '',
+                  nombre: '',
+                  ...(temporada && { temporada }),
+                }));
+              }}
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
               <option value="">Seleccionar...</option>
               {tiposEvento.map((t) => <option key={t.id} value={t.id}>[{t.codigo}] {t.nombre}</option>)}
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">{esConcierto ? 'Artista / Grupo' : 'Rival'}</label>
-            <input type="text" value={form.rival ?? ''} onChange={(e) => actualizarCampo('rival', e.target.value)}
-              placeholder={esConcierto ? 'Ej: Bad Bunny, Taylor Swift...' : 'Ej: Atlético de Madrid'}
-              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
+          {tipoSeleccionado && !esDeportivo && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                {'Artista / Grupo'}
+              </label>
+              <input
+                type="text"
+                value={form.rival ?? ''}
+                onChange={(e) => {
+                  const rival = e.target.value;
+                  const nombre = nombreSugerido(undefined, undefined, form.fecha ?? '', rival);
+                  setForm((prev) => ({ ...prev, rival, ...(nombre !== '' && { nombre }) }));
+                }}
+                placeholder="Ej: Bad Bunny, Taylor Swift, nombre del evento..."
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
         </div>
+
+        {esDeportivo && (
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Equipo local (anfitrión)</label>
+              <select
+                value={form.equipoLocalId ?? ''}
+                onChange={(e) => {
+                  const id = e.target.value ? Number(e.target.value) : undefined;
+                  setForm((prev) => ({ ...prev, equipoLocalId: id, equipoVisitanteId: id === prev.equipoVisitanteId ? undefined : prev.equipoVisitanteId }));
+                }}
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Seleccionar...</option>
+                {equiposDisponibles
+                  .filter((eq) => eq.id !== form.equipoVisitanteId)
+                  .map((eq) => <option key={eq.id} value={eq.id}>[{eq.codigo}] {eq.nombre}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Equipo visitante (rival)</label>
+              <select
+                value={form.equipoVisitanteId ?? ''}
+                onChange={(e) => {
+                  const id = e.target.value ? Number(e.target.value) : undefined;
+                  setForm((prev) => ({ ...prev, equipoVisitanteId: id }));
+                }}
+                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Seleccionar...</option>
+                {equiposDisponibles
+                  .filter((eq) => eq.id !== form.equipoLocalId)
+                  .map((eq) => <option key={eq.id} value={eq.id}>[{eq.codigo}] {eq.nombre}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <div>
