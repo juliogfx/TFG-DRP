@@ -1,6 +1,6 @@
 # 🚑 TFG-DRP
 
-**Ecosistema digital para gestión de Dispositivos de Riesgos Previsibles (DRP)**
+**Plataforma digital para gestión de Dispositivos de Riesgos Previsibles (DRP)**
 
 Trabajo Fin de Grado - Ingeniería Informática  
 Universidad Internacional de La Rioja (UNIR)  
@@ -12,11 +12,11 @@ Convocatoria: Julio 2026
 
 Aplicación web para la gestión integral de Dispositivos de Riesgos Previsibles en eventos multitudinarios. El sistema sustituye el modelo actual basado en hojas de cálculo Excel por una solución digital integrada, ofreciendo:
 
-- 📊 Gestión centralizada de eventos y recursos
-- 👥 Asignación y seguimiento de personal sanitario
-- 🏥 Registro de intervenciones médicas
-- 📈 Generación automática de informes y estadísticas
-- 📱 Acceso multiplataforma (web, móvil, tablet)
+- 📊 Gestión centralizada de eventos y recursos sanitarios
+- 👥 Asignación y seguimiento de personal sanitario por dotación
+- 🚑 Control del estado operativo de dotaciones en tiempo real
+- 📡 Dashboard UCO con actualización automática cada 30 segundos
+- 📱 Acceso multiplataforma sin instalación (web, móvil, tablet)
 - 🔒 Control de acceso basado en roles
 
 ---
@@ -32,18 +32,20 @@ Aplicación web para la gestión integral de Dispositivos de Riesgos Previsibles
 - **Motor:** PostgreSQL
 - **ORM:** Prisma 7
 - **Hosting:** Supabase (región eu-west-1 — Irlanda)
+- **Schema:** v4.2 — 24 modelos, 3 migraciones aplicadas
 
 ### Deploy & CI/CD
-- **Frontend:** Vercel (free tier)
+- **Frontend:** Vercel (free tier) — https://tfg-drp.vercel.app
 - **Database:** Supabase (free tier)
 - **Control de versiones:** GitHub
+- **CI/CD:** Despliegue automático en cada push a main
 
 ---
 
 ## 🚀 Estado del Proyecto
 
-- ✅ **Capítulo 2 (Contexto y Estado del Arte):** Completado (8 abril 2026)
-- ✅ **Capítulo 3 (Objetivos y Metodología):** Completado (3 mayo 2026)
+- ✅ **Capítulo 2 (Contexto y Estado del Arte):** Completado
+- ✅ **Capítulo 3 (Objetivos y Metodología):** Completado
 - 🔄 **Capítulo 4 (Desarrollo):** En progreso
 - ⏳ **Capítulo 5 (Resultados):** Pendiente
 - ⏳ **Capítulo 6 (Conclusiones):** Pendiente
@@ -56,54 +58,62 @@ Aplicación web para la gestión integral de Dispositivos de Riesgos Previsibles
 
 ```
 TFG-DRP/
-├── app/                  # Next.js App Router
-│   ├── api/              # API Routes
-│   └── components/       # Componentes React
-├── lib/                  # Utilidades y helpers
-│   └── db/               # Funciones de base de datos
+├── app/
+│   ├── api/                  # API Routes (16 endpoints)
+│   │   ├── eventos/          # CRUD eventos + soft-delete
+│   │   ├── dotaciones/       # CRUD dotaciones + asignaciones
+│   │   ├── personal/         # Catálogo personal sanitario
+│   │   ├── uco/              # Dashboard UCO
+│   │   ├── ubicaciones/      # Catálogo ubicaciones
+│   │   ├── tipos-evento/     # Catálogo tipos de evento
+│   │   ├── empresas/         # Catálogo empresas
+│   │   └── equipos/          # Catálogo equipos deportivos
+│   ├── components/           # Componentes React (Sidebar)
+│   ├── eventos/              # Páginas módulo eventos
+│   ├── dotaciones/           # Páginas módulo dotaciones
+│   └── uco/                  # Dashboard UCO
+├── lib/
+│   └── db/                   # Funciones de acceso a BD
+├── types/                    # Tipos TypeScript compartidos
 ├── prisma/
-│   ├── schema.prisma     # Schema BD v3 (19 modelos, 40 relaciones)
-│   └── migrations/       # Migraciones aplicadas
-├── public/               # Archivos estáticos
-├── types/                # Tipos TypeScript
-├── prisma.config.ts      # Configuración Prisma 7
+│   ├── schema.prisma         # Schema BD v4.2 (24 modelos)
+│   ├── seed.ts               # Datos de prueba
+│   └── migrations/           # 3 migraciones aplicadas
+├── prisma.config.ts          # Configuración Prisma 7
 └── README.md
 ```
 
 ---
 
-## 🎯 Funcionalidades Principales
+## 🎯 Módulos Implementados (MVP)
 
-### Módulo 1: Gestión de Eventos
-- Crear y configurar eventos DRP
-- Asignar ubicación, fecha y aforo
-- Dimensionamiento de recursos
+### Módulo 1: Gestión de Eventos ✅
+- CRUD completo con soft-delete
+- Selección de equipo local y visitante desde catálogo (15 equipos)
+- Filtrado de equipos por competición (LaLiga, Champions, Copa, ACB)
+- Autocompletado del nombre del evento y temporada
 
-### Módulo 2: Gestión de Personal
-- CRUD completo de personal sanitario
-- Asignación a dotaciones por evento
-- Control de disponibilidad y turnos
+### Módulo 2: Gestión de Dotaciones y Personal ✅
+- Lista de dotaciones filtrada por evento
+- Asignación de personal con roles predefinidos
+- Cambio de estado operativo: DISPONIBLE / EN_INTERVENCIÓN / NO_OPERATIVA
+- Indicador visual de cobertura de personal
 
-### Módulo 3: Gestión de Material
-- Inventario de equipamiento médico
-- Control de stock con alertas de caducidad
-- Revisión por escaneo QR
+### Módulo 3: Dashboard UCO ✅
+- Vista operativa en tiempo real
+- Tarjetas por dotación con estado y personal
+- Contadores: intervenciones, traslados clínica, traslados hospital
+- Polling automático cada 30 segundos
 
-### Módulo 4: Registro de Intervenciones (UCO)
-- Captura de datos en tiempo real
-- Clasificación por gravedad
-- Trazabilidad completa del episodio
-
-### Módulo 5: Reporting
-- Estadísticas por evento y temporada
-- Generación de informes operativos
-- Exportación de datos
+### Módulos post-MVP (diseñados, pendientes de implementar)
+- Registro de intervenciones médicas
+- Gestión de material e inventario con QR
+- Plantillas de eventos
+- Autenticación y control de acceso por roles
 
 ---
 
 ## 🔧 Instalación y Uso
-
-> **Nota:** Este proyecto está en desarrollo activo como parte de un TFG.
 
 ### Prerrequisitos
 - Node.js 24+
@@ -113,22 +123,14 @@ TFG-DRP/
 ### Instalación
 
 ```bash
-# Clonar repositorio
 git clone https://github.com/juliogfx/TFG-DRP.git
 cd TFG-DRP
-
-# Instalar dependencias
 npm install
 
-# Configurar variables de entorno
-# Crear .env con las credenciales de Supabase:
-# DATABASE_URL=...
-# DIRECT_URL=...
+# Crear .env con credenciales Supabase (ver .env.example)
 
-# Ejecutar migraciones
 npx prisma migrate dev
-
-# Iniciar servidor desarrollo
+npx prisma db seed
 npm run dev
 ```
 
@@ -138,26 +140,23 @@ La aplicación estará disponible en `http://localhost:3000`
 
 ## 🧑‍💻 Guía de Desarrollo
 
-### Convenciones del proyecto
+### Convenciones
 - Componentes en `/app/components/`
-- API routes en `/app/api/`
-- Funciones de base de datos en `/lib/db/`
+- API routes en `/app/api/` — todas con `export const dynamic = 'force-dynamic'`
+- Funciones de BD en `/lib/db/`
 - Tipos TypeScript en `/types/`
 
 ### Schema de base de datos
-Ver `prisma/schema.prisma` — v3, 19 modelos, 40 relaciones.
-Migración inicial aplicada: `20260503221121_init`
-
-### MVP — Entrega 2 (13 mayo 2026)
-1. Gestión de eventos DRP
-2. Gestión de dotaciones y asignación de personal
-3. Dashboard UCO básico
+Ver `prisma/schema.prisma` — v4.2, 24 modelos.
+Migraciones: `20260503221121_init`, `20260504202805_v4_empresas_plantillas`,
+`20260509211605_add_equipo_catalogo`
 
 ---
 
 ## 📚 Documentación
 
 - [Schema de Base de Datos](./prisma/schema.prisma)
+- [Guía de desarrollo](./DEVELOPMENT.md)
 
 ---
 
@@ -171,7 +170,7 @@ Director TFG: Luis Pedraza Gomar
 
 ## 📄 Licencia
 
-Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para más detalles.
+Este proyecto está bajo la Licencia MIT.
 
 ---
 
@@ -187,10 +186,10 @@ Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) par
 
 ```
 Fase 1: Análisis y Diseño           ██████████ 100%
-Fase 2: Implementación Backend      █░░░░░░░░░  10%
-Fase 3: Implementación Frontend     ░░░░░░░░░░   0%
-Fase 4: Testing y Validación        ░░░░░░░░░░   0%
-Fase 5: Documentación               ██████░░░░  60%
+Fase 2: Implementación Backend      █████████░  90%
+Fase 3: Implementación Frontend     ███████░░░  70%
+Fase 4: Testing y Validación        ████░░░░░░  40%
+Fase 5: Documentación               ███████░░░  70%
 ```
 
 ---
@@ -198,16 +197,17 @@ Fase 5: Documentación               ██████░░░░  60%
 ## 🗓️ Roadmap
 
 - [x] Investigación y Estado del Arte
-- [x] Definición de requisitos
-- [x] Diseño de base de datos (schema v3 — 19 modelos)
+- [x] Definición de requisitos (30 RF + 8 RNF)
+- [x] Diseño de base de datos (schema v4.2 — 24 modelos)
 - [x] Setup entorno (Next.js 14 + Prisma 7 + Supabase + Vercel)
-- [ ] Implementación módulo gestión eventos
-- [ ] Implementación módulo gestión personal y dotaciones
-- [ ] Implementación módulo intervenciones (UCO)
+- [x] Módulo gestión de eventos (CRUD + catálogo equipos)
+- [x] Módulo gestión de dotaciones y personal
+- [x] Dashboard UCO con polling en tiempo real
+- [x] Despliegue en producción (tfg-drp.vercel.app)
+- [ ] Registro de intervenciones médicas
+- [ ] Gestión de material e inventario
 - [ ] Sistema de autenticación y roles
-- [ ] Dashboard y reportes
 - [ ] Testing y validación con usuarios reales
-- [ ] Despliegue en producción
 - [ ] Defensa TFG
 
 ---
