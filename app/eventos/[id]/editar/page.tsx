@@ -120,7 +120,7 @@ export default function EditarEventoPage() {
   const promotores = empresas.filter((e) => e.tipo === 'PROMOTOR');
   const contratadas = empresas.filter((e) => e.tipo === 'CONTRATADA' || e.tipo === 'FACULTATIVOS');
   const tipoSeleccionado = tiposEvento.find((t) => t.id === form.tipoEventoId);
-  const esConcierto = tipoSeleccionado?.codigo === 'CON';
+  // esConcierto removed — label "Artista / Grupo" is now always shown for non-sports events
 
   /** Evento deportivo: PLA, CHA, COP o nombre con palabras clave deportivas */
   const esDeportivo = tipoSeleccionado
