@@ -76,7 +76,7 @@ export default function Sidebar() {
       </nav>
 
       <footer className="text-xs pt-4 border-t border-slate-300 text-slate-500">
-        v4.1 · 2026
+        v4.2 · 2026
       </footer>
     </aside>
   );
