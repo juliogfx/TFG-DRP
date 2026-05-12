@@ -204,10 +204,11 @@ Fase 5: Documentación               ███████░░░  70%
 - [x] Módulo gestión de dotaciones y personal
 - [x] Dashboard UCO con polling en tiempo real
 - [x] Despliegue en producción (tfg-drp.vercel.app)
-- [ ] Registro de intervenciones médicas
-- [ ] Gestión de material e inventario
-- [ ] Sistema de autenticación y roles
-- [ ] Testing y validación con usuarios reales
+- [ ] Registro de intervenciones médicas — Entrega 3 (17 jun)
+- [ ] Autenticación y control de acceso por roles — Entrega 3 (17 jun)
+- [ ] Gestión de material e inventario — si hay tiempo (jul)
+- [ ] Testing y validación con usuarios reales — jun/jul
+- [ ] Gestión de walkies — post-TFG
 - [ ] Defensa TFG
 
 ---
