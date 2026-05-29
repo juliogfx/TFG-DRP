@@ -55,6 +55,7 @@ Aplicación web para la gestión integral de Dispositivos de Riesgos Previsibles
 ---
 
 ## 📁 Estructura del Proyecto
+```
 TFG-DRP/
 ├── app/
 │   ├── api/                  # API Routes (17 endpoints)
@@ -84,7 +85,7 @@ TFG-DRP/
 │       └── 20260XXX_add_titulacion_catalogo
 ├── prisma.config.ts          # Configuración Prisma 7
 └── README.md
-
+```
 ---
 
 ## 🎯 Módulos Implementados (MVP)
