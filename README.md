@@ -153,9 +153,12 @@ La aplicación estará disponible en `http://localhost:3000`
 
 ### Schema de base de datos
 Ver `prisma/schema.prisma` — v4.3, 25 modelos.
-Migraciones: `20260503221121_init`, `20260504202805_v4_empresas_plantillas`,
-`20260509211605_add_equipo_catalogo`,
-`20260XXX_add_titulacion_catalogo` (pendiente)
+
+Migraciones aplicadas:
+- `20260503221121_init`
+- `20260504202805_v4_empresas_plantillas`
+- `20260509211605_add_equipo_catalogo`
+- `20260XXX_add_titulacion_catalogo` (pendiente)
 
 ---
 
