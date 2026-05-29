@@ -32,7 +32,7 @@ Aplicación web para la gestión integral de Dispositivos de Riesgos Previsibles
 - **Motor:** PostgreSQL
 - **ORM:** Prisma 7
 - **Hosting:** Supabase (región eu-west-1 — Irlanda)
-- **Schema:** v4.2 — 24 modelos, 3 migraciones aplicadas
+- **Schema:** v4.3 — 25 modelos, 4 migraciones aplicadas
 
 ### Deploy & CI/CD
 - **Frontend:** Vercel (free tier) — https://tfg-drp.vercel.app
@@ -55,11 +55,9 @@ Aplicación web para la gestión integral de Dispositivos de Riesgos Previsibles
 ---
 
 ## 📁 Estructura del Proyecto
-
-```
 TFG-DRP/
 ├── app/
-│   ├── api/                  # API Routes (16 endpoints)
+│   ├── api/                  # API Routes (17 endpoints)
 │   │   ├── eventos/          # CRUD eventos + soft-delete
 │   │   ├── dotaciones/       # CRUD dotaciones + asignaciones
 │   │   ├── personal/         # Catálogo personal sanitario
@@ -67,7 +65,8 @@ TFG-DRP/
 │   │   ├── ubicaciones/      # Catálogo ubicaciones
 │   │   ├── tipos-evento/     # Catálogo tipos de evento
 │   │   ├── empresas/         # Catálogo empresas
-│   │   └── equipos/          # Catálogo equipos deportivos
+│   │   ├── equipos/          # Catálogo equipos deportivos
+│   │   └── titulaciones/     # Catálogo titulaciones sanitarias
 │   ├── components/           # Componentes React (Sidebar)
 │   ├── eventos/              # Páginas módulo eventos
 │   ├── dotaciones/           # Páginas módulo dotaciones
@@ -76,12 +75,15 @@ TFG-DRP/
 │   └── db/                   # Funciones de acceso a BD
 ├── types/                    # Tipos TypeScript compartidos
 ├── prisma/
-│   ├── schema.prisma         # Schema BD v4.2 (24 modelos)
+│   ├── schema.prisma         # Schema BD v4.3 (25 modelos)
 │   ├── seed.ts               # Datos de prueba
-│   └── migrations/           # 3 migraciones aplicadas
+│   └── migrations/           # 4 migraciones (3 aplicadas + 1 pendiente)
+│       ├── 20260503221121_init
+│       ├── 20260504202805_v4_empresas_plantillas
+│       ├── 20260509211605_add_equipo_catalogo
+│       └── 20260XXX_add_titulacion_catalogo
 ├── prisma.config.ts          # Configuración Prisma 7
 └── README.md
-```
 
 ---
 
@@ -110,6 +112,8 @@ TFG-DRP/
 - Gestión de material e inventario con QR
 - Plantillas de eventos
 - Autenticación y control de acceso por roles
+- Catálogo de titulaciones sanitarias (RF-28)
+- Catálogo de equipos deportivos con importación API (RF-29)
 
 ---
 
@@ -147,9 +151,10 @@ La aplicación estará disponible en `http://localhost:3000`
 - Tipos TypeScript en `/types/`
 
 ### Schema de base de datos
-Ver `prisma/schema.prisma` — v4.2, 24 modelos.
+Ver `prisma/schema.prisma` — v4.3, 25 modelos.
 Migraciones: `20260503221121_init`, `20260504202805_v4_empresas_plantillas`,
-`20260509211605_add_equipo_catalogo`
+`20260509211605_add_equipo_catalogo`,
+`20260XXX_add_titulacion_catalogo` (pendiente)
 
 ---
 
@@ -183,14 +188,11 @@ Este proyecto está bajo la Licencia MIT.
 ---
 
 ## 📊 Progreso del Desarrollo
-
-```
 Fase 1: Análisis y Diseño           ██████████ 100%
 Fase 2: Implementación Backend      █████████░  90%
 Fase 3: Implementación Frontend     ███████░░░  70%
 Fase 4: Testing y Validación        ████░░░░░░  40%
 Fase 5: Documentación               ███████░░░  70%
-```
 
 ---
 
@@ -198,7 +200,7 @@ Fase 5: Documentación               ███████░░░  70%
 
 - [x] Investigación y Estado del Arte
 - [x] Definición de requisitos (30 RF + 8 RNF)
-- [x] Diseño de base de datos (schema v4.2 — 24 modelos)
+- [x] Diseño de base de datos (schema v4.3 — 25 modelos)
 - [x] Setup entorno (Next.js 14 + Prisma 7 + Supabase + Vercel)
 - [x] Módulo gestión de eventos (CRUD + catálogo equipos)
 - [x] Módulo gestión de dotaciones y personal
@@ -206,6 +208,7 @@ Fase 5: Documentación               ███████░░░  70%
 - [x] Despliegue en producción (tfg-drp.vercel.app)
 - [ ] Registro de intervenciones médicas — Entrega 3 (17 jun)
 - [ ] Autenticación y control de acceso por roles — Entrega 3 (17 jun)
+- [ ] Catálogo titulaciones sanitarias (RF-28) — Entrega 3
 - [ ] Gestión de material e inventario — si hay tiempo (jul)
 - [ ] Testing y validación con usuarios reales — jun/jul
 - [ ] Gestión de walkies — post-TFG
