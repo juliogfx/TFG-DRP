@@ -188,12 +188,13 @@ Este proyecto está bajo la Licencia MIT.
 
 ---
 
-## 📊 Progreso del Desarrollo
+```
 Fase 1: Análisis y Diseño           ██████████ 100%
 Fase 2: Implementación Backend      █████████░  90%
 Fase 3: Implementación Frontend     ███████░░░  70%
 Fase 4: Testing y Validación        ████░░░░░░  40%
 Fase 5: Documentación               ███████░░░  70%
+```
 
 ---
 
