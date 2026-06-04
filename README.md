@@ -10,7 +10,9 @@ Convocatoria: Julio 2026
 
 ## 📋 Descripción
 
-Aplicación web para la gestión integral de Dispositivos de Riesgos Previsibles en eventos multitudinarios. El sistema sustituye el modelo actual basado en hojas de cálculo Excel por una solución digital integrada, ofreciendo:
+Sistema web que digitaliza la gestión operativa de Dispositivos de Riesgos Previsibles (DRP) en eventos de concurrencia masiva. Sustituye el modelo actual basado en 27 hojas de cálculo Excel por una plataforma integrada accesible desde cualquier dispositivo sin instalación.
+
+Un DRP es el conjunto de recursos humanos y materiales sanitarios desplegados en un evento para atender emergencias médicas. La plataforma cubre:
 
 - 📊 Gestión centralizada de eventos y recursos sanitarios
 - 👥 Asignación y seguimiento de personal sanitario por dotación
@@ -42,19 +44,8 @@ Aplicación web para la gestión integral de Dispositivos de Riesgos Previsibles
 
 ---
 
-## 🚀 Estado del Proyecto
-
-- ✅ **Capítulo 2 (Contexto y Estado del Arte):** Completado
-- ✅ **Capítulo 3 (Objetivos y Metodología):** Completado
-- 🔄 **Capítulo 4 (Desarrollo):** En progreso
-- ⏳ **Capítulo 5 (Resultados):** Pendiente
-- ⏳ **Capítulo 6 (Conclusiones):** Pendiente
-
-**Fecha depósito:** 15 julio 2026
-
----
-
 ## 📁 Estructura del Proyecto
+
 ```
 TFG-DRP/
 ├── app/
@@ -78,7 +69,7 @@ TFG-DRP/
 ├── prisma/
 │   ├── schema.prisma         # Schema BD v4.3 (25 modelos)
 │   ├── seed.ts               # Datos de prueba
-│   └── migrations/           # 4 migraciones (3 aplicadas + 1 pendiente)
+│   └── migrations/           # 4 migraciones aplicadas
 │       ├── 20260503221121_init
 │       ├── 20260504202805_v4_empresas_plantillas
 │       ├── 20260509211605_add_equipo_catalogo
@@ -86,6 +77,96 @@ TFG-DRP/
 ├── prisma.config.ts          # Configuración Prisma 7
 └── README.md
 ```
+
+---
+
+## ⚙️ Variables de Entorno
+
+Copia `.env.example` a `.env` y rellena los valores:
+
+| Variable | Descripción | Observaciones |
+|----------|-------------|---------------|
+| `DATABASE_URL` | Cadena de conexión al pool de Supabase (PgBouncer) | Puerto 6543. Incluir `?pgbouncer=true` |
+| `DIRECT_URL` | Conexión directa a PostgreSQL sin pool | Puerto 5432. Solo para migraciones y seed |
+
+```env
+DATABASE_URL="postgresql://postgres.[ref]:[pwd]@aws-0-eu-west-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
+DIRECT_URL="postgresql://postgres.[ref]:[pwd]@aws-0-eu-west-1.pooler.supabase.com:5432/postgres"
+```
+
+> ⚠️ Nunca subas `.env` al repositorio. El fichero ya está en `.gitignore`.
+
+---
+
+## 🔧 Instalación local para desarrollo
+
+### Prerrequisitos
+
+- **Node.js** v24 LTS o superior (`node --version`)
+- **npm** v10 o superior (`npm --version`)
+- Cuenta en [Supabase](https://supabase.com) (free tier suficiente)
+
+### Pasos
+
+```bash
+# 1. Clonar el repositorio
+git clone https://github.com/juliogfx/TFG-DRP.git
+cd TFG-DRP
+
+# 2. Instalar dependencias
+npm install
+
+# 3. Configurar variables de entorno
+cp .env.example .env
+# Editar .env con tus credenciales de Supabase
+
+# 4. Generar cliente Prisma
+npx prisma generate
+
+# 5. Aplicar migraciones
+npx prisma migrate deploy
+
+# 6. Poblar BD con datos de prueba
+npx prisma db seed
+
+# 7. Arrancar servidor de desarrollo
+npm run dev
+```
+
+La aplicación estará disponible en `http://localhost:3000`
+
+---
+
+## 🚀 Despliegue en producción (Vercel + Supabase)
+
+### 1. Crear proyecto en Supabase
+
+1. Ve a [supabase.com](https://supabase.com) → New project
+2. Elige región **eu-west-1 (Ireland)**
+3. En **Project Settings → Database** copia:
+   - **Connection string (Transaction mode)** → valor de `DATABASE_URL` (puerto 6543)
+   - **Connection string (Session mode)** → valor de `DIRECT_URL` (puerto 5432)
+
+### 2. Aplicar el schema
+
+```bash
+# Con DIRECT_URL configurado en .env
+npx prisma migrate deploy
+npx prisma db seed
+```
+
+### 3. Desplegar en Vercel
+
+1. Ve a [vercel.com](https://vercel.com) → New Project → importa este repositorio
+2. En **Settings → Environment Variables** añade `DATABASE_URL` y `DIRECT_URL` marcándolas como **Sensitive**
+3. Vercel desplegará automáticamente en cada push a `main`
+
+### 4. Verificar el despliegue
+
+```bash
+curl https://tfg-drp.vercel.app/api/eventos
+```
+
 ---
 
 ## 🎯 Módulos Implementados (MVP)
@@ -113,33 +194,8 @@ TFG-DRP/
 - Gestión de material e inventario con QR
 - Plantillas de eventos
 - Autenticación y control de acceso por roles
-- Catálogo de titulaciones sanitarias (RF-28)
-- Catálogo de equipos deportivos con importación API (RF-29)
-
----
-
-## 🔧 Instalación y Uso
-
-### Prerrequisitos
-- Node.js 24+
-- npm
-- Cuenta Supabase (o PostgreSQL local)
-
-### Instalación
-
-```bash
-git clone https://github.com/juliogfx/TFG-DRP.git
-cd TFG-DRP
-npm install
-
-# Crear .env con credenciales Supabase (ver .env.example)
-
-npx prisma migrate dev
-npx prisma db seed
-npm run dev
-```
-
-La aplicación estará disponible en `http://localhost:3000`
+- Catálogo de titulaciones sanitarias
+- Catálogo de equipos deportivos con importación API
 
 ---
 
@@ -150,8 +206,22 @@ La aplicación estará disponible en `http://localhost:3000`
 - API routes en `/app/api/` — todas con `export const dynamic = 'force-dynamic'`
 - Funciones de BD en `/lib/db/`
 - Tipos TypeScript en `/types/`
+- JSDoc obligatorio en todas las funciones
+
+### Comandos útiles
+
+| Comando | Descripción |
+|---------|-------------|
+| `npm run dev` | Servidor de desarrollo |
+| `npm run build` | Build de producción |
+| `npx prisma generate` | Regenerar cliente Prisma tras cambios en schema |
+| `npx prisma migrate dev --name nombre` | Nueva migración en desarrollo |
+| `npx prisma migrate deploy` | Aplicar migraciones en producción |
+| `npx prisma db seed` | Poblar BD con datos iniciales |
+| `npx prisma studio` | Explorador visual de BD (localhost:5555) |
 
 ### Schema de base de datos
+
 Ver `prisma/schema.prisma` — v4.3, 25 modelos.
 
 Migraciones aplicadas:
@@ -180,45 +250,3 @@ Director TFG: Luis Pedraza Gomar
 ## 📄 Licencia
 
 Este proyecto está bajo la Licencia MIT.
-
----
-
-## 🙏 Agradecimientos
-
-- UNIR - Universidad Internacional de La Rioja
-- Director del TFG: Luis Pedraza Gomar
-- Usuarios reales del sector que participaron en los cuestionarios de validación
-
----
-
-```
-Fase 1: Análisis y Diseño           ██████████ 100%
-Fase 2: Implementación Backend      █████████░  90%
-Fase 3: Implementación Frontend     ███████░░░  70%
-Fase 4: Testing y Validación        ████░░░░░░  40%
-Fase 5: Documentación               ███████░░░  70%
-```
-
----
-
-## 🗓️ Roadmap
-
-- [x] Investigación y Estado del Arte
-- [x] Definición de requisitos (30 RF + 8 RNF)
-- [x] Diseño de base de datos (schema v4.3 — 25 modelos)
-- [x] Setup entorno (Next.js 14 + Prisma 7 + Supabase + Vercel)
-- [x] Módulo gestión de eventos (CRUD + catálogo equipos)
-- [x] Módulo gestión de dotaciones y personal
-- [x] Dashboard UCO con polling en tiempo real
-- [x] Despliegue en producción (tfg-drp.vercel.app)
-- [ ] Registro de intervenciones médicas — Entrega 3 (17 jun)
-- [ ] Autenticación y control de acceso por roles — Entrega 3 (17 jun)
-- [ ] Catálogo titulaciones sanitarias (RF-28) — Entrega 3
-- [ ] Gestión de material e inventario — si hay tiempo (jul)
-- [ ] Testing y validación con usuarios reales — jun/jul
-- [ ] Gestión de walkies — post-TFG
-- [ ] Defensa TFG
-
----
-
-**Última actualización:** Mayo 2026
