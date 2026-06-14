@@ -4,8 +4,11 @@
  *
  * Pantalla principal del Coordinador de Operaciones durante el evento.
  * Muestra el estado de todas las dotaciones, personal asignado,
- * contadores de intervenciones y tabla de intervenciones activas/cerradas,
- * con actualización automática cada 30s. Permite registrar nuevas intervenciones.
+ * contadores de intervenciones y tabla de intervenciones EN CURSO,
+ * con actualización automática cada 30s.
+ *
+ * Para gestión completa de intervenciones (incluyendo cerradas y edición),
+ * navegar a /uco/intervenciones.
  *
  * Client Component — necesita fetch, polling con setInterval y estado.
  */
@@ -13,6 +16,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import type { EstadoUCO, DotacionEstado } from '@/types/uco';
 import type { EventoListItem } from '@/types/evento';
 import type {
@@ -67,12 +71,8 @@ const FORM_INTERVENCION_INICIAL = {
 
 const POLLING_INTERVAL_MS = 30_000;
 
-/**
- * Tarjeta individual de dotación para el grid del dashboard.
- */
 function TarjetaDotacion({ dotacion }: { dotacion: DotacionEstado }) {
   const personalCubierto = dotacion.numeroPersonasAsignadas >= dotacion.personalMinimo;
-
   return (
     <div className={`rounded-lg border-2 p-4 ${CARD_STYLES[dotacion.estado]}`}>
       <div className="flex items-start justify-between mb-2">
@@ -87,20 +87,17 @@ function TarjetaDotacion({ dotacion }: { dotacion: DotacionEstado }) {
           {ESTADO_LABELS[dotacion.estado]}
         </span>
       </div>
-
       <div className="flex items-center gap-2 mb-2">
         <span className={`text-sm font-semibold ${personalCubierto ? 'text-green-700' : 'text-red-600'}`}>
           👤 {dotacion.numeroPersonasAsignadas}/{dotacion.personalMinimo}
         </span>
         {!personalCubierto && <span className="text-xs text-red-500">Personal insuficiente</span>}
       </div>
-
       {dotacion.posicion && (
         <p className="text-xs text-slate-500 mb-2">
           📍 {dotacion.posicion.nombre}{dotacion.posicion.sector && ` · ${dotacion.posicion.sector}`}
         </p>
       )}
-
       {dotacion.personal.length > 0 ? (
         <div className="border-t border-slate-200 pt-2 mt-2 space-y-1">
           {dotacion.personal.map((p) => (
@@ -119,9 +116,16 @@ function TarjetaDotacion({ dotacion }: { dotacion: DotacionEstado }) {
 }
 
 /**
- * Tabla compacta para mostrar intervenciones (activas o cerradas).
+ * Tabla compacta para mostrar intervenciones EN CURSO.
+ * Las filas son clicables si se proporciona onRowClick.
  */
-function TablaIntervenciones({ intervenciones }: { intervenciones: IntervencionListItem[] }) {
+function TablaIntervenciones({
+  intervenciones,
+  onRowClick,
+}: {
+  intervenciones: IntervencionListItem[];
+  onRowClick?: (i: IntervencionListItem) => void;
+}) {
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200">
       <table className="w-full text-xs">
@@ -137,7 +141,11 @@ function TablaIntervenciones({ intervenciones }: { intervenciones: IntervencionL
         </thead>
         <tbody className="divide-y divide-slate-100">
           {intervenciones.map((i) => (
-            <tr key={i.id} className="hover:bg-slate-50 transition-colors">
+            <tr
+              key={i.id}
+              onClick={() => onRowClick?.(i)}
+              className={`hover:bg-slate-50 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
+            >
               <td className="px-3 py-2 font-mono font-bold text-slate-900">#{i.numeroIntervencion}</td>
               <td className="px-3 py-2 font-mono text-slate-700">
                 {i.dotacionActiva.codigo}
@@ -168,9 +176,6 @@ function TablaIntervenciones({ intervenciones }: { intervenciones: IntervencionL
   );
 }
 
-/**
- * Dashboard UCO — pantalla operativa principal.
- */
 export default function UCOPage() {
   const [eventos, setEventos] = useState<EventoListItem[]>([]);
   const [eventoSeleccionado, setEventoSeleccionado] = useState<number | null>(null);
@@ -186,9 +191,6 @@ export default function UCOPage() {
   const [errorIntervencion, setErrorIntervencion] = useState<string | null>(null);
   const [formIntervencion, setFormIntervencion] = useState(FORM_INTERVENCION_INICIAL);
 
-  /**
-   * Obtiene estado UCO + intervenciones del evento seleccionado.
-   */
   const fetchEstado = useCallback(async (esPolling = false) => {
     if (!eventoSeleccionado) return;
     if (esPolling) setActualizando(true);
@@ -276,7 +278,6 @@ export default function UCOPage() {
   }
 
   const intervencionesAbiertas = intervenciones.filter((i) => i.abierta);
-  const intervencionesCerradas = intervenciones.filter((i) => !i.abierta);
 
   const ultimaActualizacion = estadoUCO
     ? new Date(estadoUCO.actualizadoEn).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -378,33 +379,29 @@ export default function UCOPage() {
 
           <div className="mb-8">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold text-slate-800">Intervenciones</h2>
-              <button
-                onClick={() => setShowModalIntervencion(true)}
-                disabled={!eventoSeleccionado}
-                className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-md transition-colors"
-              >
-                + Nueva intervención
-              </button>
+              <h2 className="text-lg font-semibold text-slate-800">Intervenciones en curso</h2>
+              <div className="flex gap-3 items-center">
+                <Link
+                  href={`/uco/intervenciones${eventoSeleccionado ? `?eventoId=${eventoSeleccionado}` : ''}`}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Ver todas →
+                </Link>
+                <button
+                  onClick={() => setShowModalIntervencion(true)}
+                  disabled={!eventoSeleccionado}
+                  className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-md transition-colors"
+                >
+                  + Nueva intervención
+                </button>
+              </div>
             </div>
 
-            {intervencionesAbiertas.length > 0 && (
-              <div className="mb-4">
-                <p className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-2">En curso</p>
-                <TablaIntervenciones intervenciones={intervencionesAbiertas} />
-              </div>
-            )}
-
-            {intervencionesCerradas.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Cerradas</p>
-                <TablaIntervenciones intervenciones={intervencionesCerradas} />
-              </div>
-            )}
-
-            {intervenciones.length === 0 && (
+            {intervencionesAbiertas.length > 0 ? (
+              <TablaIntervenciones intervenciones={intervencionesAbiertas} />
+            ) : (
               <p className="text-sm text-slate-400 text-center py-4 border border-dashed border-slate-200 rounded-lg">
-                Sin intervenciones registradas en este evento.
+                Sin intervenciones activas en este momento.
               </p>
             )}
           </div>
@@ -525,10 +522,7 @@ export default function UCOPage() {
                       type="checkbox"
                       checked={formIntervencion.altaEnLugar}
                       onChange={(e) => setFormIntervencion((p) => ({
-                        ...p,
-                        altaEnLugar: e.target.checked,
-                        trasladoClinica: false,
-                        trasladoHospital: false,
+                        ...p, altaEnLugar: e.target.checked, trasladoClinica: false, trasladoHospital: false,
                       }))}
                     />
                     Alta en el lugar
@@ -538,10 +532,7 @@ export default function UCOPage() {
                       type="checkbox"
                       checked={formIntervencion.trasladoClinica}
                       onChange={(e) => setFormIntervencion((p) => ({
-                        ...p,
-                        trasladoClinica: e.target.checked,
-                        altaEnLugar: false,
-                        trasladoHospital: false,
+                        ...p, trasladoClinica: e.target.checked, altaEnLugar: false, trasladoHospital: false,
                       }))}
                     />
                     Traslado a clínica
@@ -551,10 +542,7 @@ export default function UCOPage() {
                       type="checkbox"
                       checked={formIntervencion.trasladoHospital}
                       onChange={(e) => setFormIntervencion((p) => ({
-                        ...p,
-                        trasladoHospital: e.target.checked,
-                        altaEnLugar: false,
-                        trasladoClinica: false,
+                        ...p, trasladoHospital: e.target.checked, altaEnLugar: false, trasladoClinica: false,
                       }))}
                     />
                     Traslado hospitalario

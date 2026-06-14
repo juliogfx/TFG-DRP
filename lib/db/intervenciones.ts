@@ -7,6 +7,7 @@ import { prisma } from '@/lib/db/prisma';
 import type {
   IntervencionListItem,
   CreateIntervencionInput,
+  UpdateIntervencionInput,
   SintomatologiaItem,
   GravedadIntervencion,
 } from '@/types/intervencion';
@@ -123,4 +124,43 @@ export async function getSintomatologias(): Promise<SintomatologiaItem[]> {
     select: { id: true, tipo: true, descripcion: true },
     orderBy: { tipo: 'asc' },
   });
+}
+
+/**
+ * Actualiza los campos de una intervención existente.
+ * Todos los campos son opcionales (PATCH semántico).
+ * @param id - ID de la intervención a actualizar.
+ * @param input - Campos a actualizar.
+ * @returns La intervención actualizada serializada.
+ */
+export async function updateIntervencion(
+  id: number,
+  input: UpdateIntervencionInput
+): Promise<IntervencionListItem> {
+  const intervencion = await prisma.intervencion.update({
+    where: { id },
+    data: {
+      ...(input.dotacionActivaId !== undefined && { dotacionActivaId: input.dotacionActivaId }),
+      ...(input.sintomatologiaId !== undefined && { sintomatologiaId: input.sintomatologiaId }),
+      ...(input.gravedad !== undefined && { gravedad: input.gravedad }),
+      ...(input.horaAviso !== undefined && {
+        horaAviso: input.horaAviso ? new Date(input.horaAviso) : null,
+      }),
+      ...(input.horaLlegada !== undefined && {
+        horaLlegada: input.horaLlegada ? new Date(input.horaLlegada) : null,
+      }),
+      ...(input.horaFinal !== undefined && {
+        horaFinal: input.horaFinal ? new Date(input.horaFinal) : null,
+      }),
+      ...(input.dotacionApoyoId !== undefined && { dotacionApoyoId: input.dotacionApoyoId }),
+      ...(input.altaEnLugar !== undefined && { altaEnLugar: input.altaEnLugar }),
+      ...(input.trasladoClinica !== undefined && { trasladoClinica: input.trasladoClinica }),
+      ...(input.trasladoHospital !== undefined && { trasladoHospital: input.trasladoHospital }),
+      ...(input.hospitalDestino !== undefined && { hospitalDestino: input.hospitalDestino }),
+      ...(input.dotacionTrasladoId !== undefined && { dotacionTrasladoId: input.dotacionTrasladoId }),
+      ...(input.observaciones !== undefined && { observaciones: input.observaciones }),
+    },
+    select: intervencionSelect,
+  });
+  return serializarIntervencion(intervencion);
 }

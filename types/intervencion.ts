@@ -44,3 +44,19 @@ export interface SintomatologiaItem {
   tipo: string;
   descripcion: string | null;
 }
+
+export interface UpdateIntervencionInput {
+  dotacionActivaId?: number;
+  sintomatologiaId?: number;
+  gravedad?: GravedadIntervencion;
+  horaAviso?: string | null;
+  horaLlegada?: string | null;
+  horaFinal?: string | null;
+  dotacionApoyoId?: number | null;
+  altaEnLugar?: boolean;
+  trasladoClinica?: boolean;
+  trasladoHospital?: boolean;
+  hospitalDestino?: string | null;
+  dotacionTrasladoId?: number | null;
+  observaciones?: string | null;
+}
