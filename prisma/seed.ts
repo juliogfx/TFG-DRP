@@ -5,10 +5,12 @@
  * Pobla la base de datos con datos realistas basados en el contexto operativo
  * del Estadio Santiago Bernabéu (Real Madrid), incluyendo ubicaciones, empresas,
  * tipos de evento, puestos, sintomatologías, usuarios de prueba, personal
- * sanitario y dos eventos completos con sus dotaciones.
+ * sanitario, walkies, material y dos eventos completos con sus dotaciones.
  *
  * Ejecutar con: npx prisma db seed
  * (requiere "prisma.seed" configurado en package.json)
+ *
+ * Actualizado para schema v4.3.
  */
 
 import 'dotenv/config';
@@ -26,14 +28,16 @@ const prisma = new PrismaClient({ adapter });
  * respetando las dependencias entre tablas (FK constraints).
  *
  * Orden de inserción:
+ * 0. TitulacionCatalogo (sin deps — antes de Persona)
  * 1. Ubicaciones, Empresas, TipoEventoCatalogo, Puestos, Sintomatologías (sin deps)
  * 2. UsuarioSistema (depende de Empresa)
  * 3. Personas (independientes)
  * 4. Eventos (dependen de Ubicacion, TipoEventoCatalogo, Empresa)
  * 5. Dotaciones (dependen de Evento)
+ * 6. Walkies y Material (sin deps — antes de Eventos)
  */
 async function main() {
-  console.log('🌱 Iniciando seed TFG-DRP v4.1...');
+  console.log('🌱 Iniciando seed TFG-DRP v4.3...');
 
   const [bernabeu, metropolitano, wizink] = await Promise.all([
     prisma.ubicacion.upsert({
@@ -100,6 +104,18 @@ async function main() {
         contacto: 'Departamento de Eventos',
       },
     }),
+    prisma.empresa.upsert({
+      where: { codigo: 'MED' },
+      update: {},
+      create: {
+        nombre: 'Servicios Médicos Externos S.L.',
+        codigo: 'MED',
+        tipo: TipoEmpresa.FACULTATIVOS,
+        telefono: '91 000 00 00',
+        email: 'coordinacion@sme.test',
+        contacto: 'Coordinación Facultativos',
+      },
+    }),
   ]);
   console.log('✓ Empresas creadas');
 
@@ -131,6 +147,21 @@ async function main() {
         descripcion: 'Evento musical o espectáculo',
       },
     }),
+    prisma.tipoEventoCatalogo.upsert({
+      where: { codigo: 'COP' },
+      update: {},
+      create: { nombre: 'Copa del Rey', codigo: 'COP', descripcion: 'Partido de Copa del Rey' },
+    }),
+    prisma.tipoEventoCatalogo.upsert({
+      where: { codigo: 'MAR' },
+      update: {},
+      create: { nombre: 'Maratón', codigo: 'MAR', descripcion: 'Carrera popular o maratón urbana' },
+    }),
+    prisma.tipoEventoCatalogo.upsert({
+      where: { codigo: 'REL' },
+      update: {},
+      create: { nombre: 'Acto religioso', codigo: 'REL', descripcion: 'Acto religioso o procesión multitudinaria' },
+    }),
   ]);
   console.log('✓ Tipos de evento creados');
 
@@ -161,6 +192,26 @@ async function main() {
         descripcion: 'Unidad de transporte sanitario urgente',
         requiereVehiculo: true,
       },
+    }),
+    prisma.puesto.upsert({
+      where: { nombre: 'UCO' },
+      update: {},
+      create: { nombre: 'UCO', descripcion: 'Unidad de Coordinación Operativa — puesto de mando', requiereVehiculo: false },
+    }),
+    prisma.puesto.upsert({
+      where: { nombre: 'Clínica de campaña' },
+      update: {},
+      create: { nombre: 'Clínica de campaña', descripcion: 'Puesto médico avanzado con capacidad de tratamiento', requiereVehiculo: false },
+    }),
+    prisma.puesto.upsert({
+      where: { nombre: 'Banquillo' },
+      update: {},
+      create: { nombre: 'Banquillo', descripcion: 'Puesto sanitario en banquillo de campo deportivo', requiereVehiculo: false },
+    }),
+    prisma.puesto.upsert({
+      where: { nombre: 'SVB' },
+      update: {},
+      create: { nombre: 'SVB', descripcion: 'Soporte Vital Básico — ambulancia ligera', requiereVehiculo: true },
     }),
   ]);
   console.log('✓ Puestos creados');
@@ -220,19 +271,33 @@ async function main() {
 
   const passwordHash = await bcrypt.hash('drp2026test', 10);
 
-  const usuarioUco = await prisma.usuarioSistema.upsert({
-    where: { email: 'uco@drp.test' },
-    update: {},
-    create: {
-      email: 'uco@drp.test',
-      passwordHash,
-      nombreCompleto: 'Usuario UCO Test',
-      rol: RolUsuario.UCO,
-      empresaId: empresaContratada.id,
-      activo: true,
-    },
-  });
-  console.log('✓ Usuario UCO creado');
+  const [usuarioUco] = await Promise.all([
+    prisma.usuarioSistema.upsert({
+      where: { email: 'uco@drp.test' },
+      update: {},
+      create: {
+        email: 'uco@drp.test',
+        passwordHash,
+        nombreCompleto: 'Usuario UCO Test',
+        rol: RolUsuario.UCO,
+        empresaId: empresaContratada.id,
+        activo: true,
+      },
+    }),
+    prisma.usuarioSistema.upsert({
+      where: { email: 'apoyo@drp.test' },
+      update: {},
+      create: {
+        email: 'apoyo@drp.test',
+        passwordHash,
+        nombreCompleto: 'Apoyo Informático Test',
+        rol: RolUsuario.APOYO_INFORMATICO,
+        empresaId: empresaContratada.id,
+        activo: true,
+      },
+    }),
+  ]);
+  console.log('✓ Usuarios creados');
 
   const titTES = await prisma.titulacionCatalogo.upsert({
     where: { nombre: 'Técnico en Emergencias Sanitarias' },
@@ -244,6 +309,22 @@ async function main() {
     update: {},
     create: { nombre: 'Médico', orden: 2 },
   });
+  const titDUE = await prisma.titulacionCatalogo.upsert({
+    where: { nombre: 'DUE / Enfermero/a' },
+    update: {},
+    create: { nombre: 'DUE / Enfermero/a', orden: 3 },
+  });
+  const titSocorrista = await prisma.titulacionCatalogo.upsert({
+    where: { nombre: 'Socorrista' },
+    update: {},
+    create: { nombre: 'Socorrista', orden: 4 },
+  });
+  const titVoluntario = await prisma.titulacionCatalogo.upsert({
+    where: { nombre: 'Voluntario básico' },
+    update: {},
+    create: { nombre: 'Voluntario básico', orden: 5 },
+  });
+  console.log('✓ Titulaciones creadas:', titTES.nombre, titMedico.nombre, titDUE.nombre, titSocorrista.nombre, titVoluntario.nombre);
 
   const personas = [
     {
@@ -284,6 +365,44 @@ async function main() {
     });
   }
   console.log('✓ Personal sanitario creado');
+
+  const walkieNumeros = [
+    'W-01','W-02','W-03','W-04','W-05','W-06',
+    'W-07','W-08','W-09','W-10','W-11','W-12',
+  ];
+  for (const numero of walkieNumeros) {
+    await prisma.walkie.upsert({
+      where: { numero },
+      update: {},
+      create: { numero },
+    });
+  }
+  console.log('✓ Walkies creados');
+
+  const materiales = [
+    { codigo: 'BOT-B',  nombre: 'Botiquín básico',           tipo: 'CONSUMIBLE',   esCritico: true  },
+    { codigo: 'DESA-1', nombre: 'Desfibrilador DESA',         tipo: 'EQUIPO',       esCritico: true  },
+    { codigo: 'CAM-1',  nombre: 'Camilla de tijera',          tipo: 'REUTILIZABLE', esCritico: false },
+    { codigo: 'OXI-1',  nombre: 'Botella oxígeno 3L',         tipo: 'EQUIPO',       esCritico: true  },
+    { codigo: 'TOR-1',  nombre: 'Torniquete CAT',             tipo: 'CONSUMIBLE',   esCritico: true  },
+    { codigo: 'SIL-1',  nombre: 'Silla de ruedas plegable',   tipo: 'REUTILIZABLE', esCritico: false },
+    { codigo: 'INM-1',  nombre: 'Collarín cervical',          tipo: 'CONSUMIBLE',   esCritico: false },
+    { codigo: 'MED-1',  nombre: 'Maletín médico avanzado',    tipo: 'EQUIPO',       esCritico: true  },
+  ];
+  for (const mat of materiales) {
+    await prisma.material.upsert({
+      where: { codigo: mat.codigo },
+      update: {},
+      create: {
+        ...mat,
+        tipo: mat.tipo as any,
+        stockActual: 5,
+        stockMinimo: 2,
+        activo: true,
+      },
+    });
+  }
+  console.log('✓ Material creado');
 
   const eventoBase = {
     ubicacionId: bernabeu.id,
