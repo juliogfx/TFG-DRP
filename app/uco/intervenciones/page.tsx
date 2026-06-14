@@ -60,6 +60,8 @@ function IntervencionesContent() {
   const searchParams = useSearchParams();
   const eventoIdParam = searchParams.get('eventoId');
   const eventoIdInicial = eventoIdParam ? Number(eventoIdParam) : null;
+  const filtroParam = searchParams.get('filtro');
+  const dotacionIdParam = searchParams.get('dotacionId');
 
   const [eventos, setEventos] = useState<EventoListItem[]>([]);
   const [eventoId, setEventoId] = useState<number | null>(eventoIdInicial);
@@ -70,9 +72,19 @@ function IntervencionesContent() {
   const [error, setError] = useState<string | null>(null);
 
   // Filtros
-  const [filtroEstado, setFiltroEstado] = useState<'TODAS' | 'EN_CURSO' | 'CERRADAS'>('TODAS');
-  const [filtroDotacion, setFiltroDotacion] = useState<number | ''>('');
+  const [filtroEstado, setFiltroEstado] = useState<'TODAS' | 'EN_CURSO' | 'CERRADAS'>(
+    filtroParam === 'activa' ? 'EN_CURSO' : 'TODAS'
+  );
+  const [filtroDotacion, setFiltroDotacion] = useState<number | ''>(
+    dotacionIdParam ? Number(dotacionIdParam) : ''
+  );
   const [filtroGravedad, setFiltroGravedad] = useState<'TODAS' | GravedadIntervencion>('TODAS');
+  const [filtroResolucion, setFiltroResolucion] = useState<'TODAS' | 'alta' | 'clinica' | 'hospital'>(
+    filtroParam === 'alta' ? 'alta'
+    : filtroParam === 'clinica' ? 'clinica'
+    : filtroParam === 'hospital' ? 'hospital'
+    : 'TODAS'
+  );
 
   // Modal nueva intervención
   const [showNueva, setShowNueva] = useState(false);
@@ -222,6 +234,9 @@ function IntervencionesContent() {
     if (filtroEstado === 'CERRADAS' && i.abierta) return false;
     if (filtroDotacion && i.dotacionActiva.id !== Number(filtroDotacion)) return false;
     if (filtroGravedad !== 'TODAS' && i.gravedad !== filtroGravedad) return false;
+    if (filtroResolucion === 'alta' && !i.altaEnLugar) return false;
+    if (filtroResolucion === 'clinica' && !i.trasladoClinica) return false;
+    if (filtroResolucion === 'hospital' && !i.trasladoHospital) return false;
     return true;
   });
 
@@ -323,6 +338,19 @@ function IntervencionesContent() {
                 <option value="MODERADA">Moderada</option>
                 <option value="GRAVE">Grave</option>
                 <option value="CRITICA">Crítica</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Resolución</label>
+              <select
+                value={filtroResolucion}
+                onChange={(e) => setFiltroResolucion(e.target.value as typeof filtroResolucion)}
+                className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="TODAS">Todas</option>
+                <option value="alta">Alta en lugar</option>
+                <option value="clinica">Traslado clínica</option>
+                <option value="hospital">Traslado hospital</option>
               </select>
             </div>
             <div className="ml-auto self-end">

@@ -20,6 +20,7 @@ export interface DotacionListItem {
   tipo: TipoDotacion;
   estado: EstadoDotacion;
   personalMinimo: number;
+  indicativo: string | null;
   numeroPersonasAsignadas: number;
   posicion: { id: number; nombre: string; sector: string | null; } | null;
   evento: { id: number; nombre: string; };

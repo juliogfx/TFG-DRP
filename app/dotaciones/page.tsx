@@ -49,6 +49,12 @@ export default function DotacionesPage() {
   const [errorCreacion, setErrorCreacion] = useState<string | null>(null);
   const [nuevaDotacion, setNuevaDotacion] = useState(FORM_INICIAL);
 
+  // Filtros (en cliente sobre el array ya cargado para el evento)
+  const [filtroCodigo, setFiltroCodigo] = useState('');
+  const [filtroTipoDot, setFiltroTipoDot] = useState('');
+  const [filtroIndicativo, setFiltroIndicativo] = useState('');
+  const [filtroEstadoDot, setFiltroEstadoDot] = useState('');
+
   useEffect(() => {
     async function cargarEventos() {
       try {
@@ -83,6 +89,14 @@ export default function DotacionesPage() {
     cargarDotaciones();
   }, [eventoSeleccionado]);
 
+  // Resetear filtros al cambiar de evento
+  useEffect(() => {
+    setFiltroCodigo('');
+    setFiltroTipoDot('');
+    setFiltroIndicativo('');
+    setFiltroEstadoDot('');
+  }, [eventoSeleccionado]);
+
   async function handleEliminar(id: number, codigo: string) {
     if (!window.confirm(`¿Eliminar la dotación "${codigo}"?`)) return;
     setEliminando(id);
@@ -100,7 +114,6 @@ export default function DotacionesPage() {
     }
   }
 
-  /** Abre el modal de creación tras validar que hay un evento seleccionado. */
   function abrirModal() {
     if (!eventoSeleccionado) return;
     setNuevaDotacion(FORM_INICIAL);
@@ -108,17 +121,12 @@ export default function DotacionesPage() {
     setShowModal(true);
   }
 
-  /** Cierra el modal y resetea el formulario. */
   function cerrarModal() {
     setShowModal(false);
     setNuevaDotacion(FORM_INICIAL);
     setErrorCreacion(null);
   }
 
-  /**
-   * Envía la petición POST /api/dotaciones con los datos del modal.
-   * Si la creación es exitosa, añade la nueva dotación al listado sin recargar.
-   */
   async function handleCrearDotacion() {
     setErrorCreacion(null);
     const codigo = nuevaDotacion.codigo.trim().toUpperCase();
@@ -157,6 +165,22 @@ export default function DotacionesPage() {
     }
   }
 
+  function limpiarFiltros() {
+    setFiltroCodigo('');
+    setFiltroTipoDot('');
+    setFiltroIndicativo('');
+    setFiltroEstadoDot('');
+  }
+
+  const dotacionesFiltradas = dotaciones.filter((d) => {
+    if (filtroCodigo && !d.codigo.toLowerCase().includes(filtroCodigo.toLowerCase())) return false;
+    if (filtroTipoDot && d.tipo !== filtroTipoDot) return false;
+    if (filtroIndicativo && !(d.indicativo ?? '').toLowerCase().includes(filtroIndicativo.toLowerCase())) return false;
+    if (filtroEstadoDot && d.estado !== filtroEstadoDot) return false;
+    return true;
+  });
+
+  const hayFiltrosActivos = filtroCodigo || filtroTipoDot || filtroIndicativo || filtroEstadoDot;
   const puedeCrear = !!eventoSeleccionado;
 
   return (
@@ -192,6 +216,70 @@ export default function DotacionesPage() {
         </select>
       </div>
 
+      {/* Filtros sobre las dotaciones cargadas */}
+      {eventoSeleccionado && dotaciones.length > 0 && (
+        <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+          <div className="flex flex-wrap gap-2 items-end">
+            <div className="flex-1 min-w-32">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Código</label>
+              <input
+                type="text"
+                value={filtroCodigo}
+                onChange={(e) => setFiltroCodigo(e.target.value)}
+                placeholder="Código..."
+                className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex-1 min-w-40">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Tipo</label>
+              <select
+                value={filtroTipoDot}
+                onChange={(e) => setFiltroTipoDot(e.target.value)}
+                className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Todos</option>
+                {TIPOS_DOTACION.map((t) => (
+                  <option key={t} value={t}>{TIPO_LABELS[t]}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex-1 min-w-32">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Indicativo</label>
+              <input
+                type="text"
+                value={filtroIndicativo}
+                onChange={(e) => setFiltroIndicativo(e.target.value)}
+                placeholder="Indicativo radio..."
+                className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex-1 min-w-32">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Estado</label>
+              <select
+                value={filtroEstadoDot}
+                onChange={(e) => setFiltroEstadoDot(e.target.value)}
+                className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Todos</option>
+                <option value="DISPONIBLE">Disponible</option>
+                <option value="EN_INTERVENCION">En intervención</option>
+                <option value="NO_OPERATIVA">No operativa</option>
+              </select>
+            </div>
+            <button
+              onClick={limpiarFiltros}
+              disabled={!hayFiltrosActivos}
+              className="border border-slate-300 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 text-sm font-medium px-3 py-1.5 rounded-md transition-colors"
+            >
+              Limpiar
+            </button>
+          </div>
+          <p className="text-xs text-slate-400 mt-2">
+            {dotacionesFiltradas.length} de {dotaciones.length} dotaciones
+          </p>
+        </div>
+      )}
+
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-4">{error}</div>
       )}
@@ -205,6 +293,10 @@ export default function DotacionesPage() {
           {dotaciones.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
               No hay dotaciones para este evento. Crea la primera con el botón &quot;+ Nueva dotación&quot;.
+            </div>
+          ) : dotacionesFiltradas.length === 0 ? (
+            <div className="text-center py-12 text-slate-400">
+              Ninguna dotación coincide con los filtros aplicados.
             </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-slate-200">
@@ -220,7 +312,7 @@ export default function DotacionesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {dotaciones.map((d) => (
+                  {dotacionesFiltradas.map((d) => (
                     <tr key={d.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 font-mono font-semibold text-slate-900">{d.codigo}</td>
                       <td className="px-4 py-3 text-slate-600">{TIPO_LABELS[d.tipo] ?? d.tipo}</td>

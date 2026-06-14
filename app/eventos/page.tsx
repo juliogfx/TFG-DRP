@@ -3,11 +3,9 @@
  * @description Página de listado de Eventos del módulo de gestión DRP.
  *
  * Muestra una tabla con todos los eventos activos obtenidos de
- * GET /api/eventos. Permite navegar al formulario de creación,
- * ver el detalle/edición de un evento, y eliminar con soft-delete
- * tras confirmación del usuario.
- *
- * Client Component — necesita interactividad (fetch, confirm, router).
+ * GET /api/eventos. Incluye barra de filtros (búsqueda por nombre,
+ * ubicación, tipo, fecha desde/hasta). Permite navegar al formulario
+ * de creación, ver el detalle/edición y eliminar con soft-delete.
  */
 
 'use client';
@@ -15,6 +13,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { EventoListItem } from '@/types/evento';
+
+interface UbicacionItem { id: number; codigo: string; nombre: string; }
+interface TipoEventoItem { id: number; codigo: string; nombre: string; }
 
 function useEventos() {
   const [eventos, setEventos] = useState<EventoListItem[]>([]);
@@ -46,6 +47,35 @@ export default function EventosPage() {
   const { eventos, loading, error, recargar } = useEventos();
   const [eliminando, setEliminando] = useState<number | null>(null);
 
+  // Catálogos para filtros
+  const [ubicaciones, setUbicaciones] = useState<UbicacionItem[]>([]);
+  const [tiposEvento, setTiposEvento] = useState<TipoEventoItem[]>([]);
+
+  // Filtros
+  const [busqueda, setBusqueda] = useState('');
+  const [filtroUbicacion, setFiltroUbicacion] = useState('');
+  const [filtroTipo, setFiltroTipo] = useState('');
+  const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
+  const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
+
+  useEffect(() => {
+    async function cargarCatalogos() {
+      try {
+        const [resU, resT] = await Promise.all([
+          fetch('/api/ubicaciones'),
+          fetch('/api/tipos-evento'),
+        ]);
+        const jsonU = await resU.json();
+        const jsonT = await resT.json();
+        setUbicaciones(jsonU.data ?? []);
+        setTiposEvento(jsonT.data ?? []);
+      } catch {
+        // Silencioso: los filtros pueden quedar sin opciones, pero no rompemos la página
+      }
+    }
+    cargarCatalogos();
+  }, []);
+
   async function handleEliminar(id: number, nombre: string) {
     if (!window.confirm(`¿Eliminar el evento "${nombre}"? Esta acción no se puede deshacer.`)) return;
     setEliminando(id);
@@ -63,6 +93,25 @@ export default function EventosPage() {
     }
   }
 
+  function limpiarFiltros() {
+    setBusqueda('');
+    setFiltroUbicacion('');
+    setFiltroTipo('');
+    setFiltroFechaDesde('');
+    setFiltroFechaHasta('');
+  }
+
+  const eventosFiltrados = eventos.filter((ev) => {
+    if (busqueda && !ev.nombre.toLowerCase().includes(busqueda.toLowerCase())) return false;
+    if (filtroUbicacion && ev.ubicacion.id !== Number(filtroUbicacion)) return false;
+    if (filtroTipo && ev.tipoEvento?.id !== Number(filtroTipo)) return false;
+    if (filtroFechaDesde && ev.fecha < filtroFechaDesde) return false;
+    if (filtroFechaHasta && ev.fecha > filtroFechaHasta) return false;
+    return true;
+  });
+
+  const hayFiltrosActivos = busqueda || filtroUbicacion || filtroTipo || filtroFechaDesde || filtroFechaHasta;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -76,6 +125,73 @@ export default function EventosPage() {
         >
           + Nuevo evento
         </button>
+      </div>
+
+      {/* Barra de filtros */}
+      <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
+        <input
+          type="text"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar por nombre..."
+          className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <div className="flex flex-wrap gap-2 items-end">
+          <div className="flex-1 min-w-40">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Ubicación</label>
+            <select
+              value={filtroUbicacion}
+              onChange={(e) => setFiltroUbicacion(e.target.value)}
+              className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todas</option>
+              {ubicaciones.map((u) => (
+                <option key={u.id} value={u.id}>{u.nombre}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1 min-w-40">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Tipo</label>
+            <select
+              value={filtroTipo}
+              onChange={(e) => setFiltroTipo(e.target.value)}
+              className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todos</option>
+              {tiposEvento.map((t) => (
+                <option key={t.id} value={t.id}>{t.nombre}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Desde</label>
+            <input
+              type="date"
+              value={filtroFechaDesde}
+              onChange={(e) => setFiltroFechaDesde(e.target.value)}
+              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Hasta</label>
+            <input
+              type="date"
+              value={filtroFechaHasta}
+              onChange={(e) => setFiltroFechaHasta(e.target.value)}
+              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <button
+            onClick={limpiarFiltros}
+            disabled={!hayFiltrosActivos}
+            className="border border-slate-300 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 text-sm font-medium px-3 py-1.5 rounded-md transition-colors"
+          >
+            Limpiar
+          </button>
+        </div>
+        <p className="text-xs text-slate-400">
+          {eventosFiltrados.length} de {eventos.length} eventos
+        </p>
       </div>
 
       {loading && <div className="text-center py-12 text-slate-500">Cargando eventos...</div>}
@@ -95,6 +211,10 @@ export default function EventosPage() {
                 Crear el primero
               </button>
             </div>
+          ) : eventosFiltrados.length === 0 ? (
+            <div className="text-center py-12 text-slate-400">
+              Ningún evento coincide con los filtros aplicados.
+            </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-slate-200">
               <table className="w-full text-sm">
@@ -109,7 +229,7 @@ export default function EventosPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {eventos.map((evento) => (
+                  {eventosFiltrados.map((evento) => (
                     <tr key={evento.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 font-medium text-slate-900">{evento.nombre}</td>
                       <td className="px-4 py-3 text-slate-600">

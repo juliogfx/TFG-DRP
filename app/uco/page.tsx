@@ -3,20 +3,20 @@
  * @description Dashboard UCO — vista operativa en tiempo real del evento DRP.
  *
  * Pantalla principal del Coordinador de Operaciones durante el evento.
- * Muestra el estado de todas las dotaciones, personal asignado,
- * contadores de intervenciones y tabla de intervenciones EN CURSO,
- * con actualización automática cada 30s.
+ * Muestra el estado de todas las dotaciones, contadores clicables y
+ * tabla de intervenciones EN CURSO, con actualización automática cada 30s.
  *
- * Para gestión completa de intervenciones (incluyendo cerradas y edición),
- * navegar a /uco/intervenciones.
+ * Tarjetas de dotación con tamaño adaptativo según total de dotaciones:
+ *   ≤8 = amplio | ≤16 = normal | ≤24 = compacto | ≤35 = mini | >35 = micro
  *
- * Client Component — necesita fetch, polling con setInterval y estado.
+ * Para gestión completa de intervenciones navegar a /uco/intervenciones.
  */
 
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import type { EstadoUCO, DotacionEstado } from '@/types/uco';
 import type { EventoListItem } from '@/types/evento';
 import type {
@@ -25,6 +25,8 @@ import type {
   GravedadIntervencion,
   SintomatologiaItem,
 } from '@/types/intervencion';
+
+type ModoTarjeta = 'amplio' | 'normal' | 'compacto' | 'mini' | 'micro';
 
 const TIPO_LABELS: Record<string, string> = {
   AMBULANCIA: 'Ambulancia', BOTIQUIN: 'Botiquín', UVI: 'UVI Móvil',
@@ -36,6 +38,12 @@ const CARD_STYLES: Record<string, string> = {
   DISPONIBLE: 'border-green-200 bg-green-50',
   EN_INTERVENCION: 'border-yellow-300 bg-yellow-50',
   NO_OPERATIVA: 'border-red-200 bg-red-50',
+};
+
+const DOT_STYLES: Record<string, string> = {
+  DISPONIBLE: 'bg-green-500',
+  EN_INTERVENCION: 'bg-yellow-500',
+  NO_OPERATIVA: 'bg-red-500',
 };
 
 const BADGE_STYLES: Record<string, string> = {
@@ -57,6 +65,14 @@ const GRAVEDAD_STYLES: Record<string, string> = {
   CRITICA:  'bg-red-100 text-red-700',
 };
 
+const GRID_CLASSES: Record<ModoTarjeta, string> = {
+  amplio:   'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4',
+  normal:   'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3',
+  compacto: 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-3',
+  mini:     'grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2',
+  micro:    'grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-8 xl:grid-cols-10 gap-2',
+};
+
 const FORM_INTERVENCION_INICIAL = {
   dotacionActivaId: '' as number | '',
   sintomatologiaId: '' as number | '',
@@ -71,10 +87,152 @@ const FORM_INTERVENCION_INICIAL = {
 
 const POLLING_INTERVAL_MS = 30_000;
 
-function TarjetaDotacion({ dotacion }: { dotacion: DotacionEstado }) {
+function calcularModo(numDotaciones: number): ModoTarjeta {
+  if (numDotaciones <= 8) return 'amplio';
+  if (numDotaciones <= 16) return 'normal';
+  if (numDotaciones <= 24) return 'compacto';
+  if (numDotaciones <= 35) return 'mini';
+  return 'micro';
+}
+
+/**
+ * Tarjeta de dotación con tamaño y contenido adaptativos al modo.
+ * Si la dotación está EN_INTERVENCION, la tarjeta entera es clicable
+ * hacia /uco/intervenciones con filtro de dotación activa.
+ * Si no, muestra un enlace pequeño "Ver historial →".
+ */
+function TarjetaDotacion({
+  dotacion,
+  eventoId,
+  modo,
+}: {
+  dotacion: DotacionEstado;
+  eventoId: number;
+  modo: ModoTarjeta;
+}) {
+  const router = useRouter();
   const personalCubierto = dotacion.numeroPersonasAsignadas >= dotacion.personalMinimo;
+  const enIntervencion = dotacion.estado === 'EN_INTERVENCION';
+
+  function navegarActiva() {
+    router.push(`/uco/intervenciones?eventoId=${eventoId}&dotacionId=${dotacion.id}&filtro=activa`);
+  }
+
+  function navegarHistorial(e: React.MouseEvent) {
+    e.stopPropagation();
+    router.push(`/uco/intervenciones?eventoId=${eventoId}&dotacionId=${dotacion.id}`);
+  }
+
+  // MICRO — solo código + punto de color
+  if (modo === 'micro') {
+    return (
+      <div
+        onClick={enIntervencion ? navegarActiva : undefined}
+        className={`rounded border ${CARD_STYLES[dotacion.estado]} p-2 flex items-center gap-1.5 ${enIntervencion ? 'cursor-pointer hover:ring-2 hover:ring-yellow-300' : ''}`}
+        title={`${dotacion.codigo} — ${ESTADO_LABELS[dotacion.estado]}`}
+      >
+        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${DOT_STYLES[dotacion.estado]}`} />
+        <span className="text-xs font-mono font-bold text-slate-900 truncate">{dotacion.codigo}</span>
+      </div>
+    );
+  }
+
+  // MINI — código + badge estado + icono cobertura
+  if (modo === 'mini') {
+    return (
+      <div
+        onClick={enIntervencion ? navegarActiva : undefined}
+        className={`rounded border ${CARD_STYLES[dotacion.estado]} p-2 ${enIntervencion ? 'cursor-pointer hover:ring-2 hover:ring-yellow-300' : ''}`}
+        title={enIntervencion ? 'Ver intervención activa' : `${dotacion.codigo} — ${ESTADO_LABELS[dotacion.estado]}`}
+      >
+        <div className="flex items-center justify-between gap-1">
+          <span className="text-xs font-mono font-bold text-slate-900 truncate">{dotacion.codigo}</span>
+          <span className={`text-[10px] ${personalCubierto ? 'text-green-700' : 'text-red-600'}`}>
+            {personalCubierto ? '✓' : '✗'}
+          </span>
+        </div>
+        <span className={`block mt-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full text-center ${BADGE_STYLES[dotacion.estado]}`}>
+          {ESTADO_LABELS[dotacion.estado]}
+        </span>
+      </div>
+    );
+  }
+
+  // COMPACTO — código + tipo + badge + cobertura número
+  if (modo === 'compacto') {
+    return (
+      <div
+        onClick={enIntervencion ? navegarActiva : undefined}
+        className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-3 ${enIntervencion ? 'cursor-pointer hover:ring-2 hover:ring-yellow-300' : ''}`}
+        title={enIntervencion ? 'Ver intervención activa' : undefined}
+      >
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-sm font-mono font-bold text-slate-900">{dotacion.codigo}</span>
+          <span className={`text-xs font-semibold ${personalCubierto ? 'text-green-700' : 'text-red-600'}`}>
+            {dotacion.numeroPersonasAsignadas}/{dotacion.personalMinimo}
+          </span>
+        </div>
+        <p className="text-xs text-slate-500 mb-1">{TIPO_LABELS[dotacion.tipo] ?? dotacion.tipo}</p>
+        <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full ${BADGE_STYLES[dotacion.estado]}`}>
+          {ESTADO_LABELS[dotacion.estado]}
+        </span>
+      </div>
+    );
+  }
+
+  // NORMAL — código, indicativo, tipo, badge, cobertura, personal máx 3
+  if (modo === 'normal') {
+    return (
+      <div
+        onClick={enIntervencion ? navegarActiva : undefined}
+        className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-3 ${enIntervencion ? 'cursor-pointer hover:ring-2 hover:ring-yellow-300' : ''}`}
+      >
+        <div className="flex items-start justify-between mb-1">
+          <div className="min-w-0 flex-1">
+            <span className="text-sm font-mono font-bold text-slate-900">{dotacion.codigo}</span>
+            {dotacion.indicativo && (
+              <span className="ml-1.5 text-xs text-slate-500 font-mono">{dotacion.indicativo}</span>
+            )}
+            <p className="text-xs text-slate-500 mt-0.5">{TIPO_LABELS[dotacion.tipo] ?? dotacion.tipo}</p>
+          </div>
+          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${BADGE_STYLES[dotacion.estado]}`}>
+            {ESTADO_LABELS[dotacion.estado]}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-xs mb-1">
+          <span className={`font-semibold ${personalCubierto ? 'text-green-700' : 'text-red-600'}`}>
+            👤 {dotacion.numeroPersonasAsignadas}/{dotacion.personalMinimo}
+          </span>
+        </div>
+        {dotacion.personal.length > 0 && (
+          <div className="border-t border-slate-200 pt-1 mt-1 space-y-0.5">
+            {dotacion.personal.slice(0, 3).map((p) => (
+              <div key={p.id} className="text-xs text-slate-700 truncate">
+                {p.nombreCompleto}
+              </div>
+            ))}
+            {dotacion.personal.length > 3 && (
+              <div className="text-xs text-slate-400">+{dotacion.personal.length - 3} más…</div>
+            )}
+          </div>
+        )}
+        {enIntervencion ? (
+          <p className="text-xs text-yellow-700 mt-2 font-medium">Ver intervención activa →</p>
+        ) : (
+          <button onClick={navegarHistorial} className="text-xs text-slate-400 hover:text-slate-600 mt-2">
+            Ver historial →
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // AMPLIO — todo
   return (
-    <div className={`rounded-lg border-2 p-4 ${CARD_STYLES[dotacion.estado]}`}>
+    <div
+      onClick={enIntervencion ? navegarActiva : undefined}
+      className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-4 ${enIntervencion ? 'cursor-pointer hover:ring-2 hover:ring-yellow-300' : ''}`}
+    >
       <div className="flex items-start justify-between mb-2">
         <div>
           <span className="text-lg font-bold font-mono text-slate-900">{dotacion.codigo}</span>
@@ -111,14 +269,17 @@ function TarjetaDotacion({ dotacion }: { dotacion: DotacionEstado }) {
       ) : (
         <p className="text-xs text-slate-400 italic mt-1">Sin personal asignado</p>
       )}
+      {enIntervencion ? (
+        <p className="text-xs text-yellow-700 mt-2 font-medium">Ver intervención activa →</p>
+      ) : (
+        <button onClick={navegarHistorial} className="text-xs text-slate-400 hover:text-slate-600 mt-2">
+          Ver historial →
+        </button>
+      )}
     </div>
   );
 }
 
-/**
- * Tabla compacta para mostrar intervenciones EN CURSO.
- * Las filas son clicables si se proporciona onRowClick.
- */
 function TablaIntervenciones({
   intervenciones,
   onRowClick,
@@ -177,6 +338,7 @@ function TablaIntervenciones({
 }
 
 export default function UCOPage() {
+  const router = useRouter();
   const [eventos, setEventos] = useState<EventoListItem[]>([]);
   const [eventoSeleccionado, setEventoSeleccionado] = useState<number | null>(null);
   const [estadoUCO, setEstadoUCO] = useState<EstadoUCO | null>(null);
@@ -278,10 +440,18 @@ export default function UCOPage() {
   }
 
   const intervencionesAbiertas = intervenciones.filter((i) => i.abierta);
-
   const ultimaActualizacion = estadoUCO
     ? new Date(estadoUCO.actualizadoEn).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : null;
+  const numDotaciones = estadoUCO?.dotaciones.length ?? 0;
+  const modoTarjeta: ModoTarjeta = calcularModo(numDotaciones);
+
+  function urlIntervenciones(filtro?: string) {
+    const params = new URLSearchParams();
+    if (eventoSeleccionado) params.set('eventoId', String(eventoSeleccionado));
+    if (filtro) params.set('filtro', filtro);
+    return `/uco/intervenciones?${params.toString()}`;
+  }
 
   return (
     <div>
@@ -353,28 +523,44 @@ export default function UCOPage() {
             </div>
           </div>
 
+          {/* Contadores clicables */}
           <div className="grid grid-cols-4 gap-4 mb-2">
-            <div className="bg-white border border-slate-200 rounded-lg p-4 text-center">
+            <button
+              onClick={() => router.push(urlIntervenciones())}
+              title="Ver intervenciones"
+              className="bg-white border border-slate-200 rounded-lg p-4 text-center cursor-pointer hover:ring-2 hover:ring-blue-300 transition"
+            >
               <p className="text-3xl font-bold text-slate-900">{estadoUCO.contadores.totalIntervenciones}</p>
               <p className="text-xs text-slate-500 mt-1">Intervenciones</p>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-lg p-4 text-center">
+            </button>
+            <button
+              onClick={() => router.push(urlIntervenciones('alta'))}
+              title="Ver intervenciones con alta en lugar"
+              className="bg-white border border-slate-200 rounded-lg p-4 text-center cursor-pointer hover:ring-2 hover:ring-blue-300 transition"
+            >
               <p className="text-3xl font-bold text-blue-600">{estadoUCO.contadores.altasEnLugar}</p>
               <p className="text-xs text-slate-500 mt-1">Altas en lugar</p>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-lg p-4 text-center">
+            </button>
+            <button
+              onClick={() => router.push(urlIntervenciones('clinica'))}
+              title="Ver traslados a clínica"
+              className="bg-white border border-slate-200 rounded-lg p-4 text-center cursor-pointer hover:ring-2 hover:ring-blue-300 transition"
+            >
               <p className="text-3xl font-bold text-orange-600">{estadoUCO.contadores.trasladosClinica}</p>
               <p className="text-xs text-slate-500 mt-1">Traslados clínica</p>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-lg p-4 text-center">
+            </button>
+            <button
+              onClick={() => router.push(urlIntervenciones('hospital'))}
+              title="Ver traslados a hospital"
+              className="bg-white border border-slate-200 rounded-lg p-4 text-center cursor-pointer hover:ring-2 hover:ring-blue-300 transition"
+            >
               <p className="text-3xl font-bold text-red-600">{estadoUCO.contadores.trasladosHospital}</p>
               <p className="text-xs text-slate-500 mt-1">Traslados hospital</p>
-            </div>
+            </button>
           </div>
           <p className="text-xs text-slate-400 mb-8">
             Los contadores reflejan las intervenciones médicas registradas en el sistema durante el evento.
-            El estado operativo de las dotaciones (disponible / en intervención / no operativa)
-            se gestiona desde el módulo Dotaciones.
+            El estado operativo de las dotaciones se gestiona desde el módulo Dotaciones.
           </p>
 
           <div className="mb-8">
@@ -382,7 +568,7 @@ export default function UCOPage() {
               <h2 className="text-lg font-semibold text-slate-800">Intervenciones en curso</h2>
               <div className="flex gap-3 items-center">
                 <Link
-                  href={`/uco/intervenciones${eventoSeleccionado ? `?eventoId=${eventoSeleccionado}` : ''}`}
+                  href={urlIntervenciones()}
                   className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                 >
                   Ver todas →
@@ -406,13 +592,23 @@ export default function UCOPage() {
             )}
           </div>
 
-          <h2 className="text-lg font-semibold text-slate-800 mb-3">Dotaciones</h2>
+          <div className="flex items-center mb-3">
+            <h2 className="text-lg font-semibold text-slate-800">Estado de dotaciones</h2>
+            <span className="text-xs text-slate-400 ml-2">
+              ({numDotaciones} dotaciones · modo {modoTarjeta})
+            </span>
+          </div>
           {estadoUCO.dotaciones.length === 0 ? (
             <div className="text-center py-12 text-slate-400">No hay dotaciones activas para este evento.</div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className={GRID_CLASSES[modoTarjeta]}>
               {estadoUCO.dotaciones.map((dotacion) => (
-                <TarjetaDotacion key={dotacion.id} dotacion={dotacion} />
+                <TarjetaDotacion
+                  key={dotacion.id}
+                  dotacion={dotacion}
+                  eventoId={eventoSeleccionado!}
+                  modo={modoTarjeta}
+                />
               ))}
             </div>
           )}
