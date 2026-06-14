@@ -34,7 +34,7 @@ Un DRP es el conjunto de recursos humanos y materiales sanitarios desplegados en
 - **Motor:** PostgreSQL
 - **ORM:** Prisma 7
 - **Hosting:** Supabase (región eu-west-1 — Irlanda)
-- **Schema:** v4.3 — 25 modelos, 4 migraciones aplicadas
+- **Schema:** v4.3 — 25 modelos, 5 migraciones aplicadas
 
 ### Deploy & CI/CD
 - **Frontend:** Vercel (free tier) — https://tfg-drp.vercel.app
@@ -69,11 +69,12 @@ TFG-DRP/
 ├── prisma/
 │   ├── schema.prisma         # Schema BD v4.3 (25 modelos)
 │   ├── seed.ts               # Datos de prueba
-│   └── migrations/           # 4 migraciones aplicadas
+│   └── migrations/           # 5 migraciones aplicadas
 │       ├── 20260503221121_init
 │       ├── 20260504202805_v4_empresas_plantillas
 │       ├── 20260509211605_add_equipo_catalogo
-│       └── 20260XXX_add_titulacion_catalogo
+│       ├── 20260614175936_add_titulacion_catalogo
+│       └── 20260614183110_rename_admin_apoyo_informatico
 ├── prisma.config.ts          # Configuración Prisma 7
 └── README.md
 ```
@@ -228,7 +229,8 @@ Migraciones aplicadas:
 - `20260503221121_init`
 - `20260504202805_v4_empresas_plantillas`
 - `20260509211605_add_equipo_catalogo`
-- `20260XXX_add_titulacion_catalogo` (pendiente)
+- `20260614175936_add_titulacion_catalogo`
+- `20260614183110_rename_admin_apoyo_informatico`
 
 ---
 
