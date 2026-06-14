@@ -245,6 +245,31 @@ export async function desasignarPersona(dotacionId: number, personaId: number): 
 }
 
 /**
+ * Actualiza el campo `asiste` de una asignación de personal.
+ * Usado por el endpoint PATCH /api/dotaciones/:id/asignaciones
+ * para registrar la asistencia en tiempo real durante el evento.
+ * Acepta null para permitir volver al estado "sin registrar".
+ *
+ * @param dotacionId - ID de la dotación.
+ * @param personaId  - ID de la persona cuya asistencia se actualiza.
+ * @param asiste     - true = asiste, false = ausente, null = sin registrar.
+ * @returns La asignación actualizada serializada.
+ * @throws Error si la asignación no existe.
+ */
+export async function updateAsistencia(
+  dotacionId: number,
+  personaId: number,
+  asiste: boolean | null
+): Promise<AsignacionPersonalItem> {
+  const asignacion = await prisma.asignacionPersonalDotacion.update({
+    where: { dotacionId_personaId: { dotacionId, personaId } },
+    data: { asiste },
+    select: asignacionSelect,
+  });
+  return serializarAsignacion(asignacion);
+}
+
+/**
  * Obtiene la lista de todo el personal activo disponible para asignar.
  * Incluye voluntarios y facultativos, ordenados alfabéticamente.
  *

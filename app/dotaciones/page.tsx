@@ -1,19 +1,8 @@
-/**
- * @file app/dotaciones/page.tsx
- * @description Página de listado de Dotaciones del módulo de gestión DRP.
- *
- * Muestra un selector de evento para filtrar dotaciones, y una tabla
- * con las dotaciones del evento seleccionado. Permite navegar al detalle
- * de cada dotación y eliminarlas con soft-delete tras confirmación.
- *
- * Client Component — necesita fetch, estado y router.
- */
-
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { DotacionListItem } from '@/types/dotacion';
+import type { DotacionListItem, TipoDotacion } from '@/types/dotacion';
 import type { EventoListItem } from '@/types/evento';
 
 const TIPO_LABELS: Record<string, string> = {
@@ -21,6 +10,11 @@ const TIPO_LABELS: Record<string, string> = {
   SVB: 'SVB', CLINICA: 'Clínica', AVANZADA: 'Avanzada',
   BANQUILLO: 'Banquillo', LIMA: 'LIMA', UCO_UNIT: 'UCO',
 };
+
+const TIPOS_DOTACION: TipoDotacion[] = [
+  'AMBULANCIA', 'BOTIQUIN', 'UVI', 'SVB', 'CLINICA',
+  'AVANZADA', 'BANQUILLO', 'LIMA', 'UCO_UNIT',
+];
 
 const ESTADO_STYLES: Record<string, string> = {
   DISPONIBLE: 'bg-green-100 text-green-700',
@@ -34,6 +28,13 @@ const ESTADO_LABELS: Record<string, string> = {
   NO_OPERATIVA: 'No operativa',
 };
 
+const FORM_INICIAL = {
+  codigo: '',
+  tipo: 'BOTIQUIN' as TipoDotacion,
+  personalMinimo: 2,
+  indicativo: '',
+};
+
 export default function DotacionesPage() {
   const router = useRouter();
   const [eventos, setEventos] = useState<EventoListItem[]>([]);
@@ -42,6 +43,11 @@ export default function DotacionesPage() {
   const [loadingDotaciones, setLoadingDotaciones] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [eliminando, setEliminando] = useState<number | null>(null);
+
+  const [showModal, setShowModal] = useState(false);
+  const [creando, setCreando] = useState(false);
+  const [errorCreacion, setErrorCreacion] = useState<string | null>(null);
+  const [nuevaDotacion, setNuevaDotacion] = useState(FORM_INICIAL);
 
   useEffect(() => {
     async function cargarEventos() {
@@ -94,6 +100,65 @@ export default function DotacionesPage() {
     }
   }
 
+  /** Abre el modal de creación tras validar que hay un evento seleccionado. */
+  function abrirModal() {
+    if (!eventoSeleccionado) return;
+    setNuevaDotacion(FORM_INICIAL);
+    setErrorCreacion(null);
+    setShowModal(true);
+  }
+
+  /** Cierra el modal y resetea el formulario. */
+  function cerrarModal() {
+    setShowModal(false);
+    setNuevaDotacion(FORM_INICIAL);
+    setErrorCreacion(null);
+  }
+
+  /**
+   * Envía la petición POST /api/dotaciones con los datos del modal.
+   * Si la creación es exitosa, añade la nueva dotación al listado sin recargar.
+   */
+  async function handleCrearDotacion() {
+    setErrorCreacion(null);
+    const codigo = nuevaDotacion.codigo.trim().toUpperCase();
+    if (!codigo) {
+      setErrorCreacion('El código es obligatorio.');
+      return;
+    }
+    if (!eventoSeleccionado) {
+      setErrorCreacion('No hay evento seleccionado.');
+      return;
+    }
+    setCreando(true);
+    try {
+      const indicativo = nuevaDotacion.indicativo.trim();
+      const res = await fetch('/api/dotaciones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventoId: eventoSeleccionado,
+          codigo,
+          tipo: nuevaDotacion.tipo,
+          personalMinimo: nuevaDotacion.personalMinimo,
+          indicativo: indicativo || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
+
+      const creada = json.data as DotacionListItem;
+      setDotaciones((prev) => [...prev, creada].sort((a, b) => a.codigo.localeCompare(b.codigo)));
+      cerrarModal();
+    } catch (e) {
+      setErrorCreacion(e instanceof Error ? e.message : 'Error al crear la dotación');
+    } finally {
+      setCreando(false);
+    }
+  }
+
+  const puedeCrear = !!eventoSeleccionado;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -102,9 +167,10 @@ export default function DotacionesPage() {
           <p className="text-sm text-slate-500 mt-1">Personal y recursos por evento</p>
         </div>
         <button
-          disabled={true}
-          title="Próximamente"
-          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-md transition-colors"
+          onClick={abrirModal}
+          disabled={!puedeCrear}
+          title={puedeCrear ? 'Crear nueva dotación' : 'Selecciona un evento primero'}
+          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-md transition-colors"
         >
           + Nueva dotación
         </button>
@@ -138,7 +204,7 @@ export default function DotacionesPage() {
         <>
           {dotaciones.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
-              No hay dotaciones para este evento. Próximamente podrás crear dotaciones desde aquí.
+              No hay dotaciones para este evento. Crea la primera con el botón &quot;+ Nueva dotación&quot;.
             </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-slate-200">
@@ -190,6 +256,94 @@ export default function DotacionesPage() {
             </div>
           )}
         </>
+      )}
+
+      {showModal && (
+        <div
+          className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4"
+          onClick={cerrarModal}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-slate-900 mb-1">Nueva dotación</h2>
+            <p className="text-xs text-slate-500 mb-5">Los campos marcados con * son obligatorios.</p>
+
+            {errorCreacion && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-md text-sm mb-4">
+                {errorCreacion}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Código *</label>
+                <input
+                  type="text"
+                  value={nuevaDotacion.codigo}
+                  onChange={(e) => setNuevaDotacion((prev) => ({ ...prev, codigo: e.target.value }))}
+                  placeholder="B01"
+                  maxLength={20}
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Tipo *</label>
+                <select
+                  value={nuevaDotacion.tipo}
+                  onChange={(e) => setNuevaDotacion((prev) => ({ ...prev, tipo: e.target.value as TipoDotacion }))}
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {TIPOS_DOTACION.map((t) => (
+                    <option key={t} value={t}>{TIPO_LABELS[t]}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Personal mínimo *</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={nuevaDotacion.personalMinimo}
+                  onChange={(e) => setNuevaDotacion((prev) => ({ ...prev, personalMinimo: Math.max(1, Number(e.target.value) || 1) }))}
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Indicativo radio</label>
+                <input
+                  type="text"
+                  value={nuevaDotacion.indicativo}
+                  onChange={(e) => setNuevaDotacion((prev) => ({ ...prev, indicativo: e.target.value }))}
+                  placeholder="DELTA-3"
+                  maxLength={50}
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={cerrarModal}
+                disabled={creando}
+                className="border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-4 py-2 rounded-md transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCrearDotacion}
+                disabled={creando}
+                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-md transition-colors"
+              >
+                {creando ? 'Creando...' : 'Crear dotación'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
