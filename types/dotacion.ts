@@ -35,7 +35,7 @@ export interface AsignacionPersonalItem {
     id: number;
     nombreCompleto: string;
     tipo: TipoPersona;
-    titulacion: string;
+    titulacion: string | null;
     telefono: string | null;
   };
 }
@@ -52,7 +52,7 @@ export interface PersonaListItem {
   id: number;
   nombreCompleto: string;
   tipo: TipoPersona;
-  titulacion: string;
+  titulacion: string | null;
   telefono: string | null;
   activo: boolean;
 }

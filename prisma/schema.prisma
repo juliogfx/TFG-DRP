@@ -32,7 +32,7 @@ enum RolUsuario {
   VOLUNTARIO
   FACULTATIVO
   ALMACEN
-  ADMIN
+  APOYO_INFORMATICO
   PROMOTOR
   EMPRESA_CONTRATADA
   EMPRESA_FACULTATIVOS
@@ -426,6 +426,28 @@ model Dotacion {
 }
 
 // =============================================================================
+// TITULACION_CATALOGO
+// =============================================================================
+
+/// Catálogo de titulaciones sanitarias seleccionables
+/// para el registro de personal (v4.3).
+model TitulacionCatalogo {
+  id          Int      @id @default(autoincrement())
+  nombre      String   @unique @db.VarChar(100)
+  descripcion String?  @db.VarChar(300)
+  orden       Int      @default(0)
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  personas Persona[]
+
+  @@index([activo])
+  @@index([orden])
+  @@map("titulacion_catalogo")
+}
+
+// =============================================================================
 // PERSONA
 // =============================================================================
 
@@ -435,13 +457,14 @@ model Persona {
   email          String      @unique @db.VarChar(255)
   telefono       String?     @db.VarChar(20)
   tipo           TipoPersona
-  titulacion     String      @db.VarChar(100)
+  titulacionId   Int?        @map("titulacion_id")
   acreditacion   String?     @db.VarChar(100)
   activo         Boolean     @default(true)
   observaciones  String?     @db.Text
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")
 
+  titulacion   TitulacionCatalogo? @relation(fields: [titulacionId], references: [id])
   asignaciones AsignacionPersonalDotacion[]
 
   @@index([tipo])

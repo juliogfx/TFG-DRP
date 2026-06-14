@@ -26,7 +26,7 @@ import type {
 
 const posicionSelect = { id: true, nombre: true, sector: true } as const;
 const eventoSelect = { id: true, nombre: true } as const;
-const personaSelect = { id: true, nombreCompleto: true, tipo: true, titulacion: true, telefono: true } as const;
+const personaSelect = { id: true, nombreCompleto: true, tipo: true, titulacion: { select: { nombre: true } }, telefono: true } as const;
 const asignacionSelect = {
   id: true,
   rolEnDotacion: true,
@@ -47,7 +47,7 @@ function serializarAsignacion(a: {
   turnoInicioPrev: Date | null;
   turnoFinPrev: Date | null;
   asiste: boolean | null;
-  persona: { id: number; nombreCompleto: string; tipo: string; titulacion: string; telefono: string | null; };
+  persona: { id: number; nombreCompleto: string; tipo: string; titulacion: { nombre: string } | null; telefono: string | null; };
 }): AsignacionPersonalItem {
   return {
     id: a.id,
@@ -55,7 +55,13 @@ function serializarAsignacion(a: {
     turnoInicioPrev: a.turnoInicioPrev?.toISOString() ?? null,
     turnoFinPrev: a.turnoFinPrev?.toISOString() ?? null,
     asiste: a.asiste,
-    persona: { ...a.persona, tipo: a.persona.tipo as AsignacionPersonalItem['persona']['tipo'] },
+    persona: {
+      id: a.persona.id,
+      nombreCompleto: a.persona.nombreCompleto,
+      tipo: a.persona.tipo as AsignacionPersonalItem['persona']['tipo'],
+      titulacion: a.persona.titulacion?.nombre ?? null,
+      telefono: a.persona.telefono,
+    },
   };
 }
 
@@ -278,8 +284,12 @@ export async function updateAsistencia(
 export async function getPersonalDisponible(): Promise<PersonaListItem[]> {
   const personas = await prisma.persona.findMany({
     where: { activo: true },
-    select: { id: true, nombreCompleto: true, tipo: true, titulacion: true, telefono: true, activo: true },
+    select: { id: true, nombreCompleto: true, tipo: true, titulacion: { select: { nombre: true } }, telefono: true, activo: true },
     orderBy: { nombreCompleto: 'asc' },
   });
-  return personas.map((p) => ({ ...p, tipo: p.tipo as PersonaListItem['tipo'] }));
+  return personas.map((p) => ({
+    ...p,
+    tipo: p.tipo as PersonaListItem['tipo'],
+    titulacion: p.titulacion?.nombre ?? null,
+  }));
 }

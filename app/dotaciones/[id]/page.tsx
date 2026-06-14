@@ -292,7 +292,7 @@ export default function DotacionDetallePage() {
                     <span className={`font-medium ${asignacion.persona.tipo === 'FACULTATIVO' ? 'text-purple-600' : 'text-blue-600'}`}>
                       {asignacion.persona.tipo === 'FACULTATIVO' ? 'Facultativo' : 'Voluntario'}
                     </span>
-                    {' · '}{asignacion.persona.titulacion}
+                    {asignacion.persona.titulacion && <>{' · '}{asignacion.persona.titulacion}</>}
                   </p>
                   {asignacion.turnoInicioPrev && (
                     <p className="text-xs text-slate-400 mt-0.5">

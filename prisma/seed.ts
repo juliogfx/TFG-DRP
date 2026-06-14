@@ -234,33 +234,44 @@ async function main() {
   });
   console.log('✓ Usuario UCO creado');
 
+  const titTES = await prisma.titulacionCatalogo.upsert({
+    where: { nombre: 'Técnico en Emergencias Sanitarias' },
+    update: {},
+    create: { nombre: 'Técnico en Emergencias Sanitarias', orden: 1 },
+  });
+  const titMedico = await prisma.titulacionCatalogo.upsert({
+    where: { nombre: 'Médico' },
+    update: {},
+    create: { nombre: 'Médico', orden: 2 },
+  });
+
   const personas = [
     {
       email: 'voluntario1@drp.test',
       nombreCompleto: 'Voluntario Uno Test',
       tipo: TipoPersona.VOLUNTARIO,
-      titulacion: 'Técnico en Emergencias Sanitarias',
+      titulacionId: titTES.id,
       telefono: '600 000 001',
     },
     {
       email: 'voluntario2@drp.test',
       nombreCompleto: 'Voluntario Dos Test',
       tipo: TipoPersona.VOLUNTARIO,
-      titulacion: 'Técnico en Emergencias Sanitarias',
+      titulacionId: titTES.id,
       telefono: '600 000 002',
     },
     {
       email: 'facultativo1@drp.test',
       nombreCompleto: 'Facultativo Uno Test',
       tipo: TipoPersona.FACULTATIVO,
-      titulacion: 'Médico',
+      titulacionId: titMedico.id,
       telefono: '600 000 003',
     },
     {
       email: 'facultativo2@drp.test',
       nombreCompleto: 'Facultativo Dos Test',
       tipo: TipoPersona.FACULTATIVO,
-      titulacion: 'Médico',
+      titulacionId: titMedico.id,
       telefono: '600 000 004',
     },
   ];
@@ -268,7 +279,7 @@ async function main() {
   for (const p of personas) {
     await prisma.persona.upsert({
       where: { email: p.email },
-      update: {},
+      update: { titulacionId: p.titulacionId },
       create: { ...p, activo: true },
     });
   }
