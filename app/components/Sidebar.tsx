@@ -24,6 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/eventos',    label: 'Eventos',    hint: 'Gestión de eventos' },
   { href: '/dotaciones', label: 'Dotaciones', hint: 'Dotaciones y personal' },
   { href: '/uco',        label: 'UCO',        hint: 'Dashboard UCO' },
+  { href: '/apoyo-informatico', label: 'Apoyo IT', hint: 'Catálogos y configuración' },
 ];
 
 /**

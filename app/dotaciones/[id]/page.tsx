@@ -360,7 +360,7 @@ export default function DotacionDetallePage() {
                   <option value="">Seleccionar persona...</option>
                   {personalParaAsignar.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.nombreCompleto} ({p.tipo === 'FACULTATIVO' ? 'Facultativo' : 'Voluntario'})
+                      {p.nombreCompleto}{p.titulacion ? ` — ${p.titulacion}` : ''} ({p.tipo === 'FACULTATIVO' ? 'Facultativo' : 'Voluntario'})
                     </option>
                   ))}
                 </select>
