@@ -361,6 +361,10 @@ export default function UCOPage() {
   const [errorIntervencion, setErrorIntervencion] = useState<string | null>(null);
   const [formIntervencion, setFormIntervencion] = useState(FORM_INTERVENCION_INICIAL);
 
+  const [busquedaEvento, setBusquedaEvento] = useState('');
+  const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
+  const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
+
   const fetchEstado = useCallback(async (esPolling = false) => {
     if (!eventoSeleccionado) return;
     if (esPolling) setActualizando(true);
@@ -448,6 +452,13 @@ export default function UCOPage() {
   }
 
   const intervencionesAbiertas = intervenciones.filter((i) => i.abierta);
+
+  const eventosFiltrados = eventos.filter((ev) => {
+    if (busquedaEvento && !ev.nombre.toLowerCase().includes(busquedaEvento.toLowerCase())) return false;
+    if (filtroFechaDesde && ev.fecha < filtroFechaDesde) return false;
+    if (filtroFechaHasta && ev.fecha > filtroFechaHasta) return false;
+    return true;
+  });
   const ultimaActualizacion = estadoUCO
     ? new Date(estadoUCO.actualizadoEn).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : null;
@@ -477,19 +488,68 @@ export default function UCOPage() {
         </div>
       </div>
 
-      <div className="mb-6">
-        <select
-          value={eventoSeleccionado ?? ''}
-          onChange={(e) => setEventoSeleccionado(e.target.value ? Number(e.target.value) : null)}
-          className="w-full max-w-md border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">Selecciona un evento...</option>
-          {eventos.map((ev) => (
-            <option key={ev.id} value={ev.id}>
-              {ev.nombre} — {new Date(ev.fecha + 'T00:00:00').toLocaleDateString('es-ES')}
-            </option>
-          ))}
-        </select>
+      <div className="mb-6 p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={busquedaEvento}
+            onChange={(e) => setBusquedaEvento(e.target.value)}
+            placeholder="Buscar evento por nombre..."
+            className="flex-1 border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <select
+            value={eventoSeleccionado ?? ''}
+            onChange={(e) => {
+              setEventoSeleccionado(e.target.value ? Number(e.target.value) : null);
+              setBusquedaEvento('');
+            }}
+            className="flex-1 max-w-xs border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Selecciona un evento...</option>
+            {eventosFiltrados.map((ev) => (
+              <option key={ev.id} value={ev.id}>
+                {ev.nombre} — {new Date(ev.fecha + 'T00:00:00').toLocaleDateString('es-ES')}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex gap-2 items-center">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Desde</label>
+            <input
+              type="date"
+              value={filtroFechaDesde}
+              onChange={(e) => setFiltroFechaDesde(e.target.value)}
+              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Hasta</label>
+            <input
+              type="date"
+              value={filtroFechaHasta}
+              onChange={(e) => setFiltroFechaHasta(e.target.value)}
+              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          {(busquedaEvento || filtroFechaDesde || filtroFechaHasta) && (
+            <button
+              onClick={() => {
+                setBusquedaEvento('');
+                setFiltroFechaDesde('');
+                setFiltroFechaHasta('');
+              }}
+              className="self-end text-xs text-blue-600 hover:text-blue-800 font-medium pb-1.5"
+            >
+              Limpiar
+            </button>
+          )}
+          {eventosFiltrados.length !== eventos.length && (
+            <span className="self-end text-xs text-slate-400 pb-1.5">
+              {eventosFiltrados.length} de {eventos.length} eventos
+            </span>
+          )}
+        </div>
       </div>
 
       {error && (
