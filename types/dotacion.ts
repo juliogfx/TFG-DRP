@@ -23,7 +23,7 @@ export interface DotacionListItem {
   indicativo: string | null;
   numeroPersonasAsignadas: number;
   posicion: { id: number; nombre: string; sector: string | null; } | null;
-  evento: { id: number; nombre: string; };
+  evento: { id: number; nombre: string; fecha: string; };
 }
 
 export interface AsignacionPersonalItem {
@@ -45,6 +45,13 @@ export interface DotacionDetalle extends DotacionListItem {
   indicativo: string | null;
   numDues: number;
   personal: AsignacionPersonalItem[];
+  evento: {
+    id: number;
+    nombre: string;
+    fecha: string;
+    horaIncorporacionSspp: string | null;
+    horaFinalizacionSspp: string | null;
+  };
   createdAt: string;
   updatedAt: string;
 }

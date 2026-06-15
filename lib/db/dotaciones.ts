@@ -25,7 +25,14 @@ import type {
 } from '@/types/dotacion';
 
 const posicionSelect = { id: true, nombre: true, sector: true } as const;
-const eventoSelect = { id: true, nombre: true } as const;
+const eventoListSelect = { id: true, nombre: true, fecha: true } as const;
+const eventoDetalleSelect = {
+  id: true,
+  nombre: true,
+  fecha: true,
+  horaIncorporacionSspp: true,
+  horaFinalizacionSspp: true,
+} as const;
 const personaSelect = { id: true, nombreCompleto: true, tipo: true, titulacion: { select: { nombre: true } }, telefono: true } as const;
 const asignacionSelect = {
   id: true,
@@ -38,8 +45,6 @@ const asignacionSelect = {
 
 /**
  * Serializa una asignación de personal convirtiendo fechas Date a strings ISO.
- * @param a - Objeto de asignación devuelto por Prisma.
- * @returns AsignacionPersonalItem listo para serializar como JSON.
  */
 function serializarAsignacion(a: {
   id: number;
@@ -66,12 +71,14 @@ function serializarAsignacion(a: {
 }
 
 /**
+ * Serializa un evento del listado convirtiendo fecha Date a ISO.
+ */
+function serializarEventoLista(e: { id: number; nombre: string; fecha: Date }): { id: number; nombre: string; fecha: string } {
+  return { id: e.id, nombre: e.nombre, fecha: e.fecha.toISOString().substring(0, 10) };
+}
+
+/**
  * Obtiene todas las dotaciones activas de un evento específico.
- * Incluye posición asignada y conteo de personal asignado.
- * Ordenadas por código ascendente (B01, B02, AMB01...).
- *
- * @param eventoId - ID del evento del que se quieren las dotaciones.
- * @returns Array de DotacionListItem listos para serializar como JSON.
  */
 export async function getDotacionesByEvento(eventoId: number): Promise<DotacionListItem[]> {
   const dotaciones = await prisma.dotacion.findMany({
@@ -84,7 +91,7 @@ export async function getDotacionesByEvento(eventoId: number): Promise<DotacionL
       personalMinimo: true,
       indicativo: true,
       posicion: { select: posicionSelect },
-      evento: { select: eventoSelect },
+      evento: { select: eventoListSelect },
       personal: { select: { id: true } },
     },
     orderBy: { codigo: 'asc' },
@@ -98,17 +105,50 @@ export async function getDotacionesByEvento(eventoId: number): Promise<DotacionL
     personalMinimo: d.personalMinimo,
     indicativo: d.indicativo,
     posicion: d.posicion,
-    evento: d.evento,
+    evento: serializarEventoLista(d.evento),
+    numeroPersonasAsignadas: d.personal.length,
+  }));
+}
+
+/**
+ * Obtiene todas las dotaciones activas de todos los eventos (sin filtro).
+ * Ordenadas por fecha de evento descendente, luego por código.
+ */
+export async function getDotacionesSinFiltro(): Promise<DotacionListItem[]> {
+  const dotaciones = await prisma.dotacion.findMany({
+    where: { deletedAt: null },
+    select: {
+      id: true,
+      codigo: true,
+      tipo: true,
+      estado: true,
+      personalMinimo: true,
+      indicativo: true,
+      posicion: { select: posicionSelect },
+      evento: { select: eventoListSelect },
+      personal: { select: { id: true } },
+    },
+    orderBy: [
+      { evento: { fecha: 'desc' } },
+      { codigo: 'asc' },
+    ],
+  });
+
+  return dotaciones.map((d) => ({
+    id: d.id,
+    codigo: d.codigo,
+    tipo: d.tipo as DotacionListItem['tipo'],
+    estado: d.estado as DotacionListItem['estado'],
+    personalMinimo: d.personalMinimo,
+    indicativo: d.indicativo,
+    posicion: d.posicion,
+    evento: serializarEventoLista(d.evento),
     numeroPersonasAsignadas: d.personal.length,
   }));
 }
 
 /**
  * Obtiene el detalle completo de una dotación por su ID.
- * Incluye posición, evento y lista completa de personal asignado.
- *
- * @param id - ID numérico de la dotación a buscar.
- * @returns DotacionDetalle si existe y no está eliminada, null en caso contrario.
  */
 export async function getDotacionById(id: number): Promise<DotacionDetalle | null> {
   const dotacion = await prisma.dotacion.findFirst({
@@ -122,7 +162,7 @@ export async function getDotacionById(id: number): Promise<DotacionDetalle | nul
       indicativo: true,
       numDues: true,
       posicion: { select: posicionSelect },
-      evento: { select: eventoSelect },
+      evento: { select: eventoDetalleSelect },
       personal: { select: asignacionSelect, orderBy: { createdAt: 'asc' } },
       createdAt: true,
       updatedAt: true,
@@ -140,7 +180,13 @@ export async function getDotacionById(id: number): Promise<DotacionDetalle | nul
     indicativo: dotacion.indicativo,
     numDues: dotacion.numDues,
     posicion: dotacion.posicion,
-    evento: dotacion.evento,
+    evento: {
+      id: dotacion.evento.id,
+      nombre: dotacion.evento.nombre,
+      fecha: dotacion.evento.fecha.toISOString().substring(0, 10),
+      horaIncorporacionSspp: dotacion.evento.horaIncorporacionSspp?.toISOString() ?? null,
+      horaFinalizacionSspp: dotacion.evento.horaFinalizacionSspp?.toISOString() ?? null,
+    },
     numeroPersonasAsignadas: dotacion.personal.length,
     personal: dotacion.personal.map(serializarAsignacion),
     createdAt: dotacion.createdAt.toISOString(),
@@ -150,10 +196,6 @@ export async function getDotacionById(id: number): Promise<DotacionDetalle | nul
 
 /**
  * Crea una nueva Dotación en la base de datos.
- *
- * @param input - Datos de la dotación. eventoId, codigo, tipo y personalMinimo son obligatorios.
- * @returns El DotacionDetalle de la dotación recién creada.
- * @throws Error si eventoId no existe o el código ya está en uso para ese evento.
  */
 export async function createDotacion(input: CreateDotacionInput): Promise<DotacionDetalle> {
   const dotacion = await prisma.dotacion.create({
@@ -171,11 +213,6 @@ export async function createDotacion(input: CreateDotacionInput): Promise<Dotaci
 
 /**
  * Actualiza los campos de una Dotación existente (PATCH semántico).
- *
- * @param id    - ID de la dotación a actualizar.
- * @param input - Campos a actualizar (todos opcionales).
- * @returns El DotacionDetalle actualizado.
- * @throws Error si la dotación no existe o está eliminada.
  */
 export async function updateDotacion(id: number, input: UpdateDotacionInput): Promise<DotacionDetalle> {
   const existe = await prisma.dotacion.findFirst({ where: { id, deletedAt: null }, select: { id: true } });
@@ -197,9 +234,6 @@ export async function updateDotacion(id: number, input: UpdateDotacionInput): Pr
 
 /**
  * Elimina lógicamente una Dotación estableciendo deletedAt al momento actual.
- *
- * @param id - ID de la dotación a eliminar.
- * @throws Error si la dotación no existe o ya ha sido eliminada.
  */
 export async function deleteDotacion(id: number): Promise<void> {
   const existe = await prisma.dotacion.findFirst({ where: { id, deletedAt: null }, select: { id: true } });
@@ -209,11 +243,6 @@ export async function deleteDotacion(id: number): Promise<void> {
 
 /**
  * Asigna una persona a una dotación creando un registro AsignacionPersonalDotacion.
- *
- * @param dotacionId - ID de la dotación destino.
- * @param input      - Datos de la asignación (personaId, rol, turnos opcionales).
- * @returns El AsignacionPersonalItem de la asignación creada.
- * @throws Error si la dotación no existe, o la persona ya está asignada.
  */
 export async function asignarPersona(dotacionId: number, input: CreateAsignacionInput): Promise<AsignacionPersonalItem> {
   const dotacion = await prisma.dotacion.findFirst({ where: { id: dotacionId, deletedAt: null }, select: { id: true } });
@@ -234,14 +263,8 @@ export async function asignarPersona(dotacionId: number, input: CreateAsignacion
 
 /**
  * Elimina físicamente la asignación de una persona a una dotación.
- * DELETE físico — AsignacionPersonalDotacion no tiene campo deletedAt en el schema.
- *
- * @param dotacionId - ID de la dotación.
- * @param personaId  - ID de la persona a desasignar.
- * @throws Error si no existe asignación para ese par dotación/persona.
  */
 export async function desasignarPersona(dotacionId: number, personaId: number): Promise<void> {
-  // Buscar la asignación por la clave única compuesta [dotacionId, personaId]
   const asignacion = await prisma.asignacionPersonalDotacion.findUnique({
     where: { dotacionId_personaId: { dotacionId, personaId } },
     select: { id: true },
@@ -254,15 +277,6 @@ export async function desasignarPersona(dotacionId: number, personaId: number): 
 
 /**
  * Actualiza el campo `asiste` de una asignación de personal.
- * Usado por el endpoint PATCH /api/dotaciones/:id/asignaciones
- * para registrar la asistencia en tiempo real durante el evento.
- * Acepta null para permitir volver al estado "sin registrar".
- *
- * @param dotacionId - ID de la dotación.
- * @param personaId  - ID de la persona cuya asistencia se actualiza.
- * @param asiste     - true = asiste, false = ausente, null = sin registrar.
- * @returns La asignación actualizada serializada.
- * @throws Error si la asignación no existe.
  */
 export async function updateAsistencia(
   dotacionId: number,
@@ -279,9 +293,6 @@ export async function updateAsistencia(
 
 /**
  * Obtiene la lista de todo el personal activo disponible para asignar.
- * Incluye voluntarios y facultativos, ordenados alfabéticamente.
- *
- * @returns Array de PersonaListItem listos para serializar como JSON.
  */
 export async function getPersonalDisponible(): Promise<PersonaListItem[]> {
   const personas = await prisma.persona.findMany({

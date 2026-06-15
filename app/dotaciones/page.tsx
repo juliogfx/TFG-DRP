@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { DotacionListItem, TipoDotacion } from '@/types/dotacion';
 import type { EventoListItem } from '@/types/evento';
 
@@ -35,10 +35,15 @@ const FORM_INICIAL = {
   indicativo: '',
 };
 
-export default function DotacionesPage() {
+function DotacionesContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const eventoIdParam = searchParams.get('eventoId');
+
   const [eventos, setEventos] = useState<EventoListItem[]>([]);
-  const [eventoSeleccionado, setEventoSeleccionado] = useState<number | null>(null);
+  const [eventoSeleccionado, setEventoSeleccionado] = useState<number | null>(
+    eventoIdParam ? Number(eventoIdParam) : null
+  );
   const [dotaciones, setDotaciones] = useState<DotacionListItem[]>([]);
   const [loadingDotaciones, setLoadingDotaciones] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +54,12 @@ export default function DotacionesPage() {
   const [errorCreacion, setErrorCreacion] = useState<string | null>(null);
   const [nuevaDotacion, setNuevaDotacion] = useState(FORM_INICIAL);
 
-  // Filtros (en cliente sobre el array ya cargado para el evento)
+  // Filtros independientes del evento (se mantienen al cambiar)
+  const [filtroNombreEvento, setFiltroNombreEvento] = useState('');
+  const [filtroFechaDotDesde, setFiltroFechaDotDesde] = useState('');
+  const [filtroFechaDotHasta, setFiltroFechaDotHasta] = useState('');
+
+  // Filtros dependientes del evento (se resetean al cambiar)
   const [filtroCodigo, setFiltroCodigo] = useState('');
   const [filtroTipoDot, setFiltroTipoDot] = useState('');
   const [filtroIndicativo, setFiltroIndicativo] = useState('');
@@ -62,7 +72,6 @@ export default function DotacionesPage() {
         if (!res.ok) throw new Error(`Error ${res.status}`);
         const json = await res.json();
         setEventos(json.data);
-        if (json.data.length > 0) setEventoSeleccionado(json.data[0].id);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Error al cargar eventos');
       }
@@ -71,12 +80,14 @@ export default function DotacionesPage() {
   }, []);
 
   useEffect(() => {
-    if (!eventoSeleccionado) return;
     async function cargarDotaciones() {
       setLoadingDotaciones(true);
       setError(null);
       try {
-        const res = await fetch(`/api/dotaciones?eventoId=${eventoSeleccionado}`);
+        const url = eventoSeleccionado
+          ? `/api/dotaciones?eventoId=${eventoSeleccionado}`
+          : '/api/dotaciones';
+        const res = await fetch(url);
         if (!res.ok) throw new Error(`Error ${res.status}`);
         const json = await res.json();
         setDotaciones(json.data);
@@ -89,7 +100,7 @@ export default function DotacionesPage() {
     cargarDotaciones();
   }, [eventoSeleccionado]);
 
-  // Resetear filtros al cambiar de evento
+  // Resetear solo los filtros dependientes del evento al cambiarlo
   useEffect(() => {
     setFiltroCodigo('');
     setFiltroTipoDot('');
@@ -170,6 +181,9 @@ export default function DotacionesPage() {
     setFiltroTipoDot('');
     setFiltroIndicativo('');
     setFiltroEstadoDot('');
+    setFiltroNombreEvento('');
+    setFiltroFechaDotDesde('');
+    setFiltroFechaDotHasta('');
   }
 
   const dotacionesFiltradas = dotaciones.filter((d) => {
@@ -177,11 +191,16 @@ export default function DotacionesPage() {
     if (filtroTipoDot && d.tipo !== filtroTipoDot) return false;
     if (filtroIndicativo && !(d.indicativo ?? '').toLowerCase().includes(filtroIndicativo.toLowerCase())) return false;
     if (filtroEstadoDot && d.estado !== filtroEstadoDot) return false;
+    if (filtroNombreEvento && !d.evento.nombre.toLowerCase().includes(filtroNombreEvento.toLowerCase())) return false;
+    if (filtroFechaDotDesde && d.evento.fecha < filtroFechaDotDesde) return false;
+    if (filtroFechaDotHasta && d.evento.fecha > filtroFechaDotHasta) return false;
     return true;
   });
 
-  const hayFiltrosActivos = filtroCodigo || filtroTipoDot || filtroIndicativo || filtroEstadoDot;
+  const hayFiltrosActivos = filtroCodigo || filtroTipoDot || filtroIndicativo || filtroEstadoDot
+    || filtroNombreEvento || filtroFechaDotDesde || filtroFechaDotHasta;
   const puedeCrear = !!eventoSeleccionado;
+  const viendoTodos = !eventoSeleccionado;
 
   return (
     <div>
@@ -201,24 +220,29 @@ export default function DotacionesPage() {
       </div>
 
       <div className="mb-6">
-        <label className="block text-sm font-medium text-slate-700 mb-1">Filtrar por evento</label>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Evento (opcional)</label>
         <select
           value={eventoSeleccionado ?? ''}
           onChange={(e) => setEventoSeleccionado(e.target.value ? Number(e.target.value) : null)}
           className="w-full max-w-md border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="">Selecciona un evento...</option>
+          <option value="">Todos los eventos</option>
           {eventos.map((ev) => (
             <option key={ev.id} value={ev.id}>
               {ev.nombre} — {new Date(ev.fecha + 'T00:00:00').toLocaleDateString('es-ES')}
             </option>
           ))}
         </select>
+        {viendoTodos && (
+          <p className="text-xs text-slate-400 mt-1">
+            Mostrando dotaciones de todos los eventos. Selecciona uno para crear nuevas dotaciones.
+          </p>
+        )}
       </div>
 
       {/* Filtros sobre las dotaciones cargadas */}
-      {eventoSeleccionado && dotaciones.length > 0 && (
-        <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+      {dotaciones.length > 0 && (
+        <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
           <div className="flex flex-wrap gap-2 items-end">
             <div className="flex-1 min-w-32">
               <label className="block text-xs font-medium text-slate-600 mb-1">Código</label>
@@ -266,6 +290,36 @@ export default function DotacionesPage() {
                 <option value="NO_OPERATIVA">No operativa</option>
               </select>
             </div>
+          </div>
+          <div className="flex flex-wrap gap-2 items-end">
+            <div className="flex-1 min-w-40">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Nombre del evento</label>
+              <input
+                type="text"
+                value={filtroNombreEvento}
+                onChange={(e) => setFiltroNombreEvento(e.target.value)}
+                placeholder="Nombre del evento..."
+                className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Fecha desde</label>
+              <input
+                type="date"
+                value={filtroFechaDotDesde}
+                onChange={(e) => setFiltroFechaDotDesde(e.target.value)}
+                className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Fecha hasta</label>
+              <input
+                type="date"
+                value={filtroFechaDotHasta}
+                onChange={(e) => setFiltroFechaDotHasta(e.target.value)}
+                className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
             <button
               onClick={limpiarFiltros}
               disabled={!hayFiltrosActivos}
@@ -274,7 +328,7 @@ export default function DotacionesPage() {
               Limpiar
             </button>
           </div>
-          <p className="text-xs text-slate-400 mt-2">
+          <p className="text-xs text-slate-400">
             {dotacionesFiltradas.length} de {dotaciones.length} dotaciones
           </p>
         </div>
@@ -288,11 +342,13 @@ export default function DotacionesPage() {
         <div className="text-center py-12 text-slate-500">Cargando dotaciones...</div>
       )}
 
-      {!loadingDotaciones && eventoSeleccionado && (
+      {!loadingDotaciones && (
         <>
           {dotaciones.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
-              No hay dotaciones para este evento. Crea la primera con el botón &quot;+ Nueva dotación&quot;.
+              {eventoSeleccionado
+                ? 'No hay dotaciones para este evento. Crea la primera con el botón "+ Nueva dotación".'
+                : 'No hay dotaciones registradas.'}
             </div>
           ) : dotacionesFiltradas.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
@@ -304,6 +360,7 @@ export default function DotacionesPage() {
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
                     <th className="text-left px-4 py-3 font-medium text-slate-600">Código</th>
+                    {viendoTodos && <th className="text-left px-4 py-3 font-medium text-slate-600">Evento</th>}
                     <th className="text-left px-4 py-3 font-medium text-slate-600">Tipo</th>
                     <th className="text-left px-4 py-3 font-medium text-slate-600">Estado</th>
                     <th className="text-center px-4 py-3 font-medium text-slate-600">Personal</th>
@@ -315,6 +372,12 @@ export default function DotacionesPage() {
                   {dotacionesFiltradas.map((d) => (
                     <tr key={d.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 font-mono font-semibold text-slate-900">{d.codigo}</td>
+                      {viendoTodos && (
+                        <td className="px-4 py-3 text-slate-600 text-xs">
+                          <div className="font-medium">{d.evento.nombre}</div>
+                          <div className="text-slate-400">{new Date(d.evento.fecha + 'T00:00:00').toLocaleDateString('es-ES')}</div>
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-slate-600">{TIPO_LABELS[d.tipo] ?? d.tipo}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ESTADO_STYLES[d.estado]}`}>
@@ -438,5 +501,13 @@ export default function DotacionesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function DotacionesPage() {
+  return (
+    <Suspense fallback={<div className="text-center py-12 text-slate-500">Cargando...</div>}>
+      <DotacionesContent />
+    </Suspense>
   );
 }

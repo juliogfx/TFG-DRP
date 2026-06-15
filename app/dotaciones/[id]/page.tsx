@@ -29,14 +29,25 @@ const ROLES_DOTACION = [
 
 /**
  * Formatea una fecha ISO como cadena local española corta.
- * @param iso - Fecha en formato ISO 8601.
- * @returns Fecha formateada como DD/MM HH:mm en zona horaria local.
  */
 function formatearFecha(iso: string): string {
   return new Date(iso).toLocaleString('es-ES', {
     day: '2-digit', month: '2-digit',
     hour: '2-digit', minute: '2-digit',
   });
+}
+
+/**
+ * Construye el valor inicial sugerido para un input datetime-local
+ * combinando la fecha del evento (YYYY-MM-DD) con una hora ISO opcional.
+ * Devuelve cadena vacía si no hay hora — el input queda sin sugerencia.
+ */
+function calcularTurnoPropuesto(fecha: string, hora: string | null): string {
+  if (!hora) return '';
+  const d = new Date(hora);
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const horaCorta = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${fecha}T${horaCorta}`;
 }
 
 export default function DotacionDetallePage() {
@@ -82,7 +93,27 @@ export default function DotacionDetallePage() {
     cargarDatos();
   }, [dotacionId]);
 
-  /** Asigna una persona a la dotación con el rol y turno seleccionados. */
+  /**
+   * Cuando la dotación se carga, propone como turno inicial los valores
+   * horaIncorporacionSspp / horaFinalizacionSspp del evento (si están definidos).
+   * Solo aplica si el usuario aún no ha editado manualmente los campos.
+   */
+  useEffect(() => {
+    if (!dotacion) return;
+    if (!turnoInicio) {
+      setTurnoInicio(calcularTurnoPropuesto(dotacion.evento.fecha, dotacion.evento.horaIncorporacionSspp));
+    }
+    if (!turnoFin) {
+      setTurnoFin(calcularTurnoPropuesto(dotacion.evento.fecha, dotacion.evento.horaFinalizacionSspp));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dotacion]);
+
+  /** Construye la URL de retorno a /dotaciones preservando el evento. */
+  function volverADotaciones() {
+    router.push(dotacion?.evento?.id ? `/dotaciones?eventoId=${dotacion.evento.id}` : '/dotaciones');
+  }
+
   async function handleAsignar() {
     setErrorAsignacion(null);
     if (!personaSeleccionada) return setErrorAsignacion('Selecciona una persona.');
@@ -106,8 +137,11 @@ export default function DotacionDetallePage() {
       setDotacion(dataDotacion.data);
       setPersonaSeleccionada('');
       setRolSeleccionado('');
-      setTurnoInicio('');
-      setTurnoFin('');
+      // Reponer la propuesta de turno tras cada asignación
+      if (dataDotacion.data) {
+        setTurnoInicio(calcularTurnoPropuesto(dataDotacion.data.evento.fecha, dataDotacion.data.evento.horaIncorporacionSspp));
+        setTurnoFin(calcularTurnoPropuesto(dataDotacion.data.evento.fecha, dataDotacion.data.evento.horaFinalizacionSspp));
+      }
     } catch (e) {
       setErrorAsignacion(e instanceof Error ? e.message : 'Error al asignar');
     } finally {
@@ -147,12 +181,6 @@ export default function DotacionDetallePage() {
     }
   }
 
-  /**
-   * Cicla el campo `asiste` en 3 estados: null → true → false → null → ...
-   * Permite al operativo de campo corregir errores volviendo a "sin registrar".
-   * @param personaId    - ID de la persona cuya asistencia se actualiza.
-   * @param asistoActual - Valor actual de asiste (null, true o false).
-   */
   async function handleToggleAsistencia(personaId: number, asistoActual: boolean | null) {
     const nuevoValor: boolean | null =
       asistoActual === null ? true :
@@ -214,7 +242,7 @@ export default function DotacionDetallePage() {
 
   return (
     <div className="max-w-3xl">
-      <button onClick={() => router.push('/dotaciones')} className="text-sm text-slate-500 hover:text-slate-700 mb-4 flex items-center gap-1">
+      <button onClick={volverADotaciones} className="text-sm text-slate-500 hover:text-slate-700 mb-4 flex items-center gap-1">
         ← Volver a dotaciones
       </button>
 
@@ -379,7 +407,12 @@ export default function DotacionDetallePage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Inicio de turno (previsto)</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Inicio de turno (previsto)
+                  {dotacion.evento.horaIncorporacionSspp && (
+                    <span className="text-slate-400 font-normal ml-1">· sugerido del evento</span>
+                  )}
+                </label>
                 <input
                   type="datetime-local"
                   value={turnoInicio}
@@ -388,7 +421,12 @@ export default function DotacionDetallePage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Fin de turno (previsto)</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Fin de turno (previsto)
+                  {dotacion.evento.horaFinalizacionSspp && (
+                    <span className="text-slate-400 font-normal ml-1">· sugerido del evento</span>
+                  )}
+                </label>
                 <input
                   type="datetime-local"
                   value={turnoFin}

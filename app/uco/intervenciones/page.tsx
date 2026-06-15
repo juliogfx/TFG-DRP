@@ -147,6 +147,13 @@ function IntervencionesContent() {
     recargar();
   }, [recargar]);
 
+  useEffect(() => {
+    setFiltroDotacion('');
+    setFiltroEstado('TODAS');
+    setFiltroGravedad('TODAS');
+    setFiltroResolucion('TODAS');
+  }, [eventoId]);
+
   async function handleRegistrar() {
     setErrorNueva(null);
     if (!formNueva.dotacionActivaId) return setErrorNueva('Selecciona la dotación activada.');
@@ -353,7 +360,18 @@ function IntervencionesContent() {
                 <option value="hospital">Traslado hospital</option>
               </select>
             </div>
-            <div className="ml-auto self-end">
+            <div className="ml-auto self-end flex items-center gap-3">
+              <button
+                onClick={() => {
+                  setFiltroEstado('TODAS');
+                  setFiltroDotacion('');
+                  setFiltroGravedad('TODAS');
+                  setFiltroResolucion('TODAS');
+                }}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Limpiar filtros
+              </button>
               <span className="text-xs text-slate-500">
                 {filtradas.length} de {intervenciones.length} intervenciones
               </span>
@@ -416,7 +434,24 @@ function IntervencionesContent() {
                       </td>
                       <td className="px-3 py-2 text-right">
                         <button
-                          onClick={(e) => { e.stopPropagation(); abrirModalVer(i); setTimeout(pasarAEditar, 0); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFormEditar({
+                              dotacionActivaId: i.dotacionActiva.id,
+                              sintomatologiaId: i.sintomatologia?.id,
+                              gravedad: i.gravedad,
+                              horaAviso: i.horaAviso,
+                              horaLlegada: i.horaLlegada,
+                              horaFinal: i.horaFinal,
+                              dotacionApoyoId: i.dotacionApoyo?.id ?? null,
+                              altaEnLugar: i.altaEnLugar,
+                              trasladoClinica: i.trasladoClinica,
+                              trasladoHospital: i.trasladoHospital,
+                              hospitalDestino: i.hospitalDestino,
+                            });
+                            setModalIntervencion({ intervencion: i, modo: 'editar' });
+                            setErrorEditar(null);
+                          }}
                           className="text-blue-600 hover:text-blue-800 font-medium"
                         >
                           Editar

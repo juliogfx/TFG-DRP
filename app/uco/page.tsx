@@ -123,13 +123,19 @@ function TarjetaDotacion({
     router.push(`/uco/intervenciones?eventoId=${eventoId}&dotacionId=${dotacion.id}`);
   }
 
+  function navegarHistorialDirecto() {
+    router.push(`/uco/intervenciones?eventoId=${eventoId}&dotacionId=${dotacion.id}`);
+  }
+
   // MICRO — solo código + punto de color
   if (modo === 'micro') {
     return (
       <div
-        onClick={enIntervencion ? navegarActiva : undefined}
-        className={`rounded border ${CARD_STYLES[dotacion.estado]} p-2 flex items-center gap-1.5 ${enIntervencion ? 'cursor-pointer hover:ring-2 hover:ring-yellow-300' : ''}`}
-        title={`${dotacion.codigo} — ${ESTADO_LABELS[dotacion.estado]}`}
+        onClick={enIntervencion ? navegarActiva : navegarHistorialDirecto}
+        className={`rounded border ${CARD_STYLES[dotacion.estado]} p-2 flex items-center gap-1.5 cursor-pointer ${enIntervencion ? 'hover:ring-2 hover:ring-yellow-300' : 'hover:ring-2 hover:ring-slate-300'}`}
+        title={enIntervencion
+          ? `${dotacion.codigo} — Ver intervención activa`
+          : `${dotacion.codigo} — ${ESTADO_LABELS[dotacion.estado]} · Ver historial`}
       >
         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${DOT_STYLES[dotacion.estado]}`} />
         <span className="text-xs font-mono font-bold text-slate-900 truncate">{dotacion.codigo}</span>
@@ -141,9 +147,11 @@ function TarjetaDotacion({
   if (modo === 'mini') {
     return (
       <div
-        onClick={enIntervencion ? navegarActiva : undefined}
-        className={`rounded border ${CARD_STYLES[dotacion.estado]} p-2 ${enIntervencion ? 'cursor-pointer hover:ring-2 hover:ring-yellow-300' : ''}`}
-        title={enIntervencion ? 'Ver intervención activa' : `${dotacion.codigo} — ${ESTADO_LABELS[dotacion.estado]}`}
+        onClick={enIntervencion ? navegarActiva : navegarHistorialDirecto}
+        className={`rounded border ${CARD_STYLES[dotacion.estado]} p-2 cursor-pointer ${enIntervencion ? 'hover:ring-2 hover:ring-yellow-300' : 'hover:ring-2 hover:ring-slate-300'}`}
+        title={enIntervencion
+          ? `${dotacion.codigo} — Ver intervención activa`
+          : `${dotacion.codigo} — ${ESTADO_LABELS[dotacion.estado]} · Ver historial`}
       >
         <div className="flex items-center justify-between gap-1">
           <span className="text-xs font-mono font-bold text-slate-900 truncate">{dotacion.codigo}</span>
@@ -162,9 +170,9 @@ function TarjetaDotacion({
   if (modo === 'compacto') {
     return (
       <div
-        onClick={enIntervencion ? navegarActiva : undefined}
-        className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-3 ${enIntervencion ? 'cursor-pointer hover:ring-2 hover:ring-yellow-300' : ''}`}
-        title={enIntervencion ? 'Ver intervención activa' : undefined}
+        onClick={enIntervencion ? navegarActiva : navegarHistorialDirecto}
+        className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-3 cursor-pointer ${enIntervencion ? 'hover:ring-2 hover:ring-yellow-300' : 'hover:ring-2 hover:ring-slate-300'}`}
+        title={enIntervencion ? 'Ver intervención activa' : 'Ver historial'}
       >
         <div className="flex items-center justify-between mb-1">
           <span className="text-sm font-mono font-bold text-slate-900">{dotacion.codigo}</span>

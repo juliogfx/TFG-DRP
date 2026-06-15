@@ -3,37 +3,35 @@
  * @description API Route de Next.js para la colección de Dotaciones.
  *
  * Endpoints:
- *   GET  /api/dotaciones?eventoId=X → Lista dotaciones de un evento
+ *   GET  /api/dotaciones           → Lista TODAS las dotaciones (sin filtro)
+ *   GET  /api/dotaciones?eventoId=X → Lista dotaciones de un evento concreto
  *   POST /api/dotaciones            → Crea una nueva dotación
  */
-
 import { NextRequest, NextResponse } from 'next/server';
-import { getDotacionesByEvento, createDotacion } from '@/lib/db/dotaciones';
+import { getDotacionesByEvento, getDotacionesSinFiltro, createDotacion } from '@/lib/db/dotaciones';
 import type { ApiResponse, ApiError, DotacionListItem, DotacionDetalle, CreateDotacionInput } from '@/types/dotacion';
+
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/dotaciones?eventoId=X
- * Devuelve todas las dotaciones activas del evento indicado.
- *
- * @param request - NextRequest con query param eventoId obligatorio.
- * @returns 200 + ApiResponse<DotacionListItem[]>
- * @returns 400 + ApiError si falta o es inválido el eventoId
- * @returns 500 + ApiError si falla la consulta a BD
+ * Si se proporciona eventoId, devuelve las dotaciones de ese evento.
+ * Si no se proporciona, devuelve todas las dotaciones activas (todos los eventos).
  */
 export async function GET(request: NextRequest): Promise<NextResponse<ApiResponse<DotacionListItem[]> | ApiError>> {
   const { searchParams } = new URL(request.url);
   const eventoIdParam = searchParams.get('eventoId');
 
-  if (!eventoIdParam) {
-    return NextResponse.json({ error: 'El parámetro eventoId es obligatorio' }, { status: 400 });
-  }
-  const eventoId = parseInt(eventoIdParam, 10);
-  if (isNaN(eventoId) || eventoId <= 0) {
-    return NextResponse.json({ error: 'eventoId debe ser un número entero positivo' }, { status: 400 });
-  }
-
   try {
-    const dotaciones = await getDotacionesByEvento(eventoId);
+    if (eventoIdParam) {
+      const eventoId = parseInt(eventoIdParam, 10);
+      if (isNaN(eventoId) || eventoId <= 0) {
+        return NextResponse.json({ error: 'eventoId debe ser un número entero positivo' }, { status: 400 });
+      }
+      const dotaciones = await getDotacionesByEvento(eventoId);
+      return NextResponse.json({ data: dotaciones }, { status: 200 });
+    }
+    const dotaciones = await getDotacionesSinFiltro();
     return NextResponse.json({ data: dotaciones }, { status: 200 });
   } catch (error) {
     console.error('[GET /api/dotaciones]', error);
@@ -47,11 +45,6 @@ export async function GET(request: NextRequest): Promise<NextResponse<ApiRespons
 /**
  * POST /api/dotaciones
  * Crea una nueva dotación para un evento.
- *
- * @param request - NextRequest con el body JSON de la nueva dotación.
- * @returns 201 + ApiResponse<DotacionDetalle>
- * @returns 400 + ApiError si faltan campos obligatorios
- * @returns 500 + ApiError si falla la inserción en BD
  */
 export async function POST(request: NextRequest): Promise<NextResponse<ApiResponse<DotacionDetalle> | ApiError>> {
   try {

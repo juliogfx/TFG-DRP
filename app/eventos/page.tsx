@@ -129,13 +129,32 @@ export default function EventosPage() {
 
       {/* Barra de filtros */}
       <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
-        <input
-          type="text"
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar por nombre..."
-          className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por nombre..."
+            className="flex-1 border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <select
+            value=""
+            onChange={(e) => {
+              if (e.target.value) {
+                const ev = eventos.find((x) => x.id === Number(e.target.value));
+                if (ev) setBusqueda(ev.nombre);
+              }
+            }}
+            className="border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-xs"
+          >
+            <option value="">Ir a evento...</option>
+            {eventos.map((ev) => (
+              <option key={ev.id} value={ev.id}>
+                {ev.nombre} — {new Date(ev.fecha + 'T00:00:00').toLocaleDateString('es-ES')}
+              </option>
+            ))}
+          </select>
+        </div>
         <div className="flex flex-wrap gap-2 items-end">
           <div className="flex-1 min-w-40">
             <label className="block text-xs font-medium text-slate-600 mb-1">Ubicación</label>
