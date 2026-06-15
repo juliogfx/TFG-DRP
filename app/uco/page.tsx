@@ -537,19 +537,20 @@ export default function UCOPage() {
               className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          {(busquedaEvento || filtroFechaDesde || filtroFechaHasta) && (
-            <button
-              onClick={() => {
-                setBusquedaEvento('');
-                setFiltroFechaDesde('');
-                setFiltroFechaHasta('');
-              }}
-              className="self-end text-xs text-blue-600 hover:text-blue-800 font-medium pb-1.5"
-            >
-              Limpiar
-            </button>
-          )}
-          {eventosFiltrados.length !== eventos.length && (
+          <button
+            onClick={() => {
+              setBusquedaEvento('');
+              setFiltroFechaDesde('');
+              setFiltroFechaHasta('');
+              setEventoSeleccionado(null);
+              setEstadoUCO(null);
+              setIntervenciones([]);
+            }}
+            className="self-end text-xs text-blue-600 hover:text-blue-800 font-medium pb-1.5"
+          >
+            Limpiar
+          </button>
+          {eventos.length > 0 && (
             <span className="self-end text-xs text-slate-400 pb-1.5">
               {eventosFiltrados.length} de {eventos.length} eventos
             </span>
