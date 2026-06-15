@@ -71,7 +71,12 @@ function IntervencionesContent() {
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Filtros
+  // Filtros de evento (búsqueda texto + fechas)
+  const [busquedaEvento, setBusquedaEvento] = useState('');
+  const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
+  const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
+
+  // Filtros de intervenciones
   const [filtroEstado, setFiltroEstado] = useState<'TODAS' | 'EN_CURSO' | 'CERRADAS'>(
     filtroParam === 'activa' ? 'EN_CURSO' : 'TODAS'
   );
@@ -118,7 +123,7 @@ function IntervencionesContent() {
       }
     }
     cargarCatalogos();
-  }, [eventoId]);
+  }, []);
 
   const recargar = useCallback(async () => {
     if (!eventoId) return;
@@ -150,6 +155,20 @@ function IntervencionesContent() {
     setFiltroGravedad('TODAS');
     setFiltroResolucion('TODAS');
   }, [eventoId]);
+
+  /** Resetea por completo todos los filtros y datos cargados. */
+  function limpiarTodo() {
+    setBusquedaEvento('');
+    setFiltroFechaDesde('');
+    setFiltroFechaHasta('');
+    setEventoId(null);
+    setIntervenciones([]);
+    setDotaciones([]);
+    setFiltroDotacion('');
+    setFiltroEstado('TODAS');
+    setFiltroGravedad('TODAS');
+    setFiltroResolucion('TODAS');
+  }
 
   async function handleRegistrar() {
     setErrorNueva(null);
@@ -232,7 +251,15 @@ function IntervencionesContent() {
     }
   }
 
-  // Aplicar filtros
+  // Lista de eventos filtrada por texto y fechas
+  const eventosFiltrados = eventos.filter((ev) => {
+    if (busquedaEvento && !ev.nombre.toLowerCase().includes(busquedaEvento.toLowerCase())) return false;
+    if (filtroFechaDesde && ev.fecha < filtroFechaDesde) return false;
+    if (filtroFechaHasta && ev.fecha > filtroFechaHasta) return false;
+    return true;
+  });
+
+  // Aplicar filtros de intervenciones
   const filtradas = intervenciones.filter((i) => {
     if (filtroEstado === 'EN_CURSO' && !i.abierta) return false;
     if (filtroEstado === 'CERRADAS' && i.abierta) return false;
@@ -279,28 +306,69 @@ function IntervencionesContent() {
         </div>
       </div>
 
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-slate-700 mb-1">Evento</label>
-        <select
-          value={eventoId ?? ''}
-          onChange={(e) => {
-            const nuevoEvento = e.target.value ? Number(e.target.value) : null;
-            setEventoId(nuevoEvento);
-            setFiltroDotacion('');
-            setFiltroEstado('TODAS');
-            setFiltroGravedad('TODAS');
-            setFiltroResolucion('TODAS');
-            setIntervenciones([]);
-          }}
-          className="w-full max-w-md border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">Selecciona un evento...</option>
-          {eventos.map((ev) => (
-            <option key={ev.id} value={ev.id}>
-              {ev.nombre} — {new Date(ev.fecha + 'T00:00:00').toLocaleDateString('es-ES')}
-            </option>
-          ))}
-        </select>
+      {/* Bloque de filtros de evento: búsqueda + select + fechas + limpiar */}
+      <div className="mb-6 p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={busquedaEvento}
+            onChange={(e) => setBusquedaEvento(e.target.value)}
+            placeholder="Buscar evento por nombre..."
+            className="flex-1 border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <select
+            value={eventoId ?? ''}
+            onChange={(e) => {
+              const nuevoEvento = e.target.value ? Number(e.target.value) : null;
+              setEventoId(nuevoEvento);
+              setBusquedaEvento('');
+              setFiltroDotacion('');
+              setFiltroEstado('TODAS');
+              setFiltroGravedad('TODAS');
+              setFiltroResolucion('TODAS');
+              setIntervenciones([]);
+            }}
+            className="flex-1 max-w-xs border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">Selecciona un evento...</option>
+            {eventosFiltrados.map((ev) => (
+              <option key={ev.id} value={ev.id}>
+                {ev.nombre} — {new Date(ev.fecha + 'T00:00:00').toLocaleDateString('es-ES')}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex gap-2 items-center">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Desde</label>
+            <input
+              type="date"
+              value={filtroFechaDesde}
+              onChange={(e) => setFiltroFechaDesde(e.target.value)}
+              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Hasta</label>
+            <input
+              type="date"
+              value={filtroFechaHasta}
+              onChange={(e) => setFiltroFechaHasta(e.target.value)}
+              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <button
+            onClick={limpiarTodo}
+            className="self-end text-xs text-blue-600 hover:text-blue-800 font-medium pb-1.5"
+          >
+            Limpiar
+          </button>
+          {eventos.length > 0 && (
+            <span className="self-end text-xs text-slate-400 pb-1.5">
+              {eventosFiltrados.length} de {eventos.length} eventos
+            </span>
+          )}
+        </div>
       </div>
 
       {error && (
