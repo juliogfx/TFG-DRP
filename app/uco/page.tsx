@@ -129,11 +129,6 @@ function TarjetaDotacion({
     router.push(`/uco/intervenciones?eventoId=${eventoId}&dotacionId=${dotacion.id}&filtro=activa`);
   }
 
-  function navegarHistorial(e: React.MouseEvent) {
-    e.stopPropagation();
-    router.push(`/uco/intervenciones?eventoId=${eventoId}&dotacionId=${dotacion.id}`);
-  }
-
   function navegarHistorialDirecto() {
     router.push(`/uco/intervenciones?eventoId=${eventoId}&dotacionId=${dotacion.id}`);
   }
@@ -203,8 +198,8 @@ function TarjetaDotacion({
   if (modo === 'normal') {
     return (
       <div
-        onClick={enIntervencion ? navegarActiva : undefined}
-        className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-3 ${enIntervencion ? 'cursor-pointer hover:ring-2 hover:ring-yellow-300' : ''}`}
+        onClick={enIntervencion ? navegarActiva : navegarHistorialDirecto}
+        className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-3 cursor-pointer ${enIntervencion ? 'hover:ring-2 hover:ring-yellow-300' : 'hover:ring-2 hover:ring-slate-300'}`}
       >
         <div className="flex items-start justify-between mb-1">
           <div className="min-w-0 flex-1">
@@ -238,9 +233,7 @@ function TarjetaDotacion({
         {enIntervencion ? (
           <p className="text-xs text-yellow-700 mt-2 font-medium">Ver intervención activa →</p>
         ) : (
-          <button onClick={navegarHistorial} className="text-xs text-slate-400 hover:text-slate-600 mt-2">
-            Ver historial →
-          </button>
+          <p className="text-xs text-slate-400 mt-2">Ver historial →</p>
         )}
       </div>
     );
@@ -249,8 +242,8 @@ function TarjetaDotacion({
   // AMPLIO — todo
   return (
     <div
-      onClick={enIntervencion ? navegarActiva : undefined}
-      className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-4 ${enIntervencion ? 'cursor-pointer hover:ring-2 hover:ring-yellow-300' : ''}`}
+      onClick={enIntervencion ? navegarActiva : navegarHistorialDirecto}
+      className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-4 cursor-pointer ${enIntervencion ? 'hover:ring-2 hover:ring-yellow-300' : 'hover:ring-2 hover:ring-slate-300'}`}
     >
       <div className="flex items-start justify-between mb-2">
         <div>
@@ -291,9 +284,7 @@ function TarjetaDotacion({
       {enIntervencion ? (
         <p className="text-xs text-yellow-700 mt-2 font-medium">Ver intervención activa →</p>
       ) : (
-        <button onClick={navegarHistorial} className="text-xs text-slate-400 hover:text-slate-600 mt-2">
-          Ver historial →
-        </button>
+        <p className="text-xs text-slate-400 mt-2">Ver historial →</p>
       )}
     </div>
   );

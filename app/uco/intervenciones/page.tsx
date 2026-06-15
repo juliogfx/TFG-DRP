@@ -156,6 +156,14 @@ function IntervencionesContent() {
     setFiltroResolucion('TODAS');
   }, [eventoId]);
 
+  useEffect(() => {
+    if (filtroParam === 'alta' || filtroParam === 'clinica' || filtroParam === 'hospital') {
+      setFiltroResolucion(filtroParam);
+    } else {
+      setFiltroResolucion('TODAS');
+    }
+  }, [filtroParam]);
+
   /** Resetea por completo todos los filtros y datos cargados. */
   function limpiarTodo() {
     setBusquedaEvento('');
