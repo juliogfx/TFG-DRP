@@ -13,6 +13,38 @@
 export type EstadoDotacion = 'DISPONIBLE' | 'EN_INTERVENCION' | 'NO_OPERATIVA';
 export type TipoDotacion = 'AMBULANCIA' | 'BOTIQUIN' | 'UVI' | 'SVB' | 'CLINICA' | 'AVANZADA' | 'BANQUILLO' | 'LIMA' | 'UCO_UNIT';
 export type TipoPersona = 'VOLUNTARIO' | 'FACULTATIVO';
+export type TipoMaterial = 'CONSUMIBLE' | 'REUTILIZABLE' | 'MEDICAMENTO' | 'EQUIPO';
+export type EstadoWalkie = 'DISPONIBLE' | 'ASIGNADO' | 'AVERIADO' | 'BAJA';
+
+export interface MaterialItem {
+  id: number;
+  codigo: string;
+  nombre: string;
+  tipo: TipoMaterial;
+  stockActual: number;
+  esCritico: boolean;
+}
+
+export interface AsignacionMaterialItem {
+  id: number;
+  material: MaterialItem;
+  cantidad: number;
+  observaciones: string | null;
+}
+
+export interface WalkieItem {
+  id: number;
+  numero: string;
+  estado: EstadoWalkie;
+}
+
+export interface AsignacionWalkieItem {
+  id: number;
+  walkie: WalkieItem;
+  fechaAsignacion: string;
+  fechaDevolucion: string | null;
+  devuelto: boolean;
+}
 
 export interface DotacionListItem {
   id: number;
@@ -45,6 +77,8 @@ export interface DotacionDetalle extends DotacionListItem {
   indicativo: string | null;
   numDues: number;
   personal: AsignacionPersonalItem[];
+  material: AsignacionMaterialItem[];
+  walkies: AsignacionWalkieItem[];
   evento: {
     id: number;
     nombre: string;

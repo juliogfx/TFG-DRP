@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import type { DotacionDetalle, PersonaListItem, EstadoDotacion } from '@/types/dotacion';
+import type {
+  DotacionDetalle,
+  PersonaListItem,
+  EstadoDotacion,
+  MaterialItem,
+  WalkieItem,
+} from '@/types/dotacion';
 
 const TIPO_LABELS: Record<string, string> = {
   AMBULANCIA: 'Ambulancia', BOTIQUIN: 'Botiquín', UVI: 'UVI Móvil',
@@ -69,21 +75,36 @@ export default function DotacionDetallePage() {
   const [cambiandoEstado, setCambiandoEstado] = useState(false);
   const [desasignando, setDesasignando] = useState<number | null>(null);
   const [actualizandoAsistencia, setActualizandoAsistencia] = useState<number | null>(null);
+  const [catalogoMaterial, setCatalogoMaterial] = useState<MaterialItem[]>([]);
+  const [walkiesDisponibles, setWalkiesDisponibles] = useState<WalkieItem[]>([]);
+  const [materialSeleccionado, setMaterialSeleccionado] = useState<number | ''>('');
+  const [cantidadMaterial, setCantidadMaterial] = useState(1);
+  const [walkieSeleccionado, setWalkieSeleccionado] = useState<number | ''>('');
+  const [asignandoMaterial, setAsignandoMaterial] = useState(false);
+  const [asignandoWalkie, setAsignandoWalkie] = useState(false);
+  const [errorMaterial, setErrorMaterial] = useState<string | null>(null);
+  const [errorWalkie, setErrorWalkie] = useState<string | null>(null);
 
   useEffect(() => {
     if (!dotacionId || isNaN(dotacionId)) { setNoEncontrada(true); setCargando(false); return; }
 
     async function cargarDatos() {
       try {
-        const [resDotacion, resPersonal] = await Promise.all([
+        const [resDotacion, resPersonal, resMaterial] = await Promise.all([
           fetch(`/api/dotaciones/${dotacionId}`),
           fetch('/api/personal'),
+          fetch('/api/material'),
         ]);
         if (resDotacion.status === 404) { setNoEncontrada(true); return; }
         if (!resDotacion.ok) throw new Error(`Error ${resDotacion.status}`);
-        const [dataDotacion, dataPersonal] = await Promise.all([resDotacion.json(), resPersonal.json()]);
+        const [dataDotacion, dataPersonal, dataMaterial] = await Promise.all([
+          resDotacion.json(),
+          resPersonal.json(),
+          resMaterial.json(),
+        ]);
         setDotacion(dataDotacion.data);
         setPersonalDisponible(dataPersonal.data ?? []);
+        setCatalogoMaterial(dataMaterial.data ?? []);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Error al cargar los datos');
       } finally {
@@ -108,6 +129,13 @@ export default function DotacionDetallePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dotacion]);
+
+  useEffect(() => {
+    if (!dotacion?.evento?.id) return;
+    fetch(`/api/walkies?eventoId=${dotacion.evento.id}`)
+      .then((r) => r.json())
+      .then((d) => setWalkiesDisponibles(d.data ?? []));
+  }, [dotacion?.evento?.id]);
 
   /** Construye la URL de retorno a /dotaciones preservando el evento. */
   function volverADotaciones() {
@@ -209,6 +237,97 @@ export default function DotacionDetallePage() {
       alert(e instanceof Error ? e.message : 'Error al actualizar asistencia');
     } finally {
       setActualizandoAsistencia(null);
+    }
+  }
+
+  async function handleAsignarMaterial() {
+    setErrorMaterial(null);
+    if (!materialSeleccionado) return setErrorMaterial('Selecciona un material.');
+    setAsignandoMaterial(true);
+    try {
+      const res = await fetch(`/api/dotaciones/${dotacionId}/material`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ materialId: materialSeleccionado, cantidad: cantidadMaterial }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
+      const resDot = await fetch(`/api/dotaciones/${dotacionId}`);
+      const dataDot = await resDot.json();
+      setDotacion(dataDot.data);
+      setMaterialSeleccionado('');
+      setCantidadMaterial(1);
+    } catch (e) {
+      setErrorMaterial(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setAsignandoMaterial(false);
+    }
+  }
+
+  async function handleDesasignarMaterial(asignacionId: number) {
+    try {
+      const res = await fetch(
+        `/api/dotaciones/${dotacionId}/material?asignacionId=${asignacionId}`,
+        { method: 'DELETE' }
+      );
+      if (!res.ok) { const json = await res.json(); throw new Error(json.error ?? `Error ${res.status}`); }
+      setDotacion((prev) => prev ? {
+        ...prev,
+        material: prev.material.filter((m) => m.id !== asignacionId),
+      } : prev);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error');
+    }
+  }
+
+  async function handleAsignarWalkie() {
+    setErrorWalkie(null);
+    if (!walkieSeleccionado) return setErrorWalkie('Selecciona un walkie.');
+    if (!dotacion?.evento?.id) return;
+    setAsignandoWalkie(true);
+    try {
+      const res = await fetch(`/api/dotaciones/${dotacionId}/walkies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walkieId: walkieSeleccionado, eventoId: dotacion.evento.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
+      const [resDot, resWalk] = await Promise.all([
+        fetch(`/api/dotaciones/${dotacionId}`),
+        fetch(`/api/walkies?eventoId=${dotacion.evento.id}`),
+      ]);
+      const [dataDot, dataWalk] = await Promise.all([resDot.json(), resWalk.json()]);
+      setDotacion(dataDot.data);
+      setWalkiesDisponibles(dataWalk.data ?? []);
+      setWalkieSeleccionado('');
+    } catch (e) {
+      setErrorWalkie(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setAsignandoWalkie(false);
+    }
+  }
+
+  async function handleDevolverWalkie(asignacionId: number) {
+    try {
+      const res = await fetch(
+        `/api/dotaciones/${dotacionId}/walkies?asignacionId=${asignacionId}`,
+        { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }
+      );
+      if (!res.ok) { const json = await res.json(); throw new Error(json.error ?? `Error ${res.status}`); }
+      const walkieDevuelto = dotacion?.walkies.find((w) => w.id === asignacionId);
+      setDotacion((prev) => prev ? {
+        ...prev,
+        walkies: prev.walkies.filter((w) => w.id !== asignacionId),
+      } : prev);
+      if (walkieDevuelto) {
+        setWalkiesDisponibles((prev) => [
+          ...prev,
+          { ...walkieDevuelto.walkie, estado: 'DISPONIBLE' as const },
+        ]);
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error');
     }
   }
 
@@ -446,6 +565,104 @@ export default function DotacionDetallePage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* ── MATERIAL ── */}
+      <div className="border border-slate-200 rounded-lg p-4 bg-slate-50 mt-6">
+        <h2 className="text-sm font-semibold text-slate-800 mb-3">Material asignado</h2>
+        {dotacion.material.length === 0 ? (
+          <p className="text-sm text-slate-400 mb-3">No hay material asignado a esta dotación.</p>
+        ) : (
+          <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden mb-3">
+            {dotacion.material.map((a) => (
+              <div key={a.id} className="flex items-center justify-between px-4 py-2 bg-white hover:bg-slate-50">
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium text-slate-900">{a.material.nombre}</span>
+                  {a.material.esCritico && (
+                    <span className="ml-2 text-xs text-red-600 font-medium">⚠ Crítico</span>
+                  )}
+                  <span className="text-xs text-slate-500 ml-2">× {a.cantidad}</span>
+                </div>
+                <button
+                  onClick={() => handleDesasignarMaterial(a.id)}
+                  className="text-xs text-red-500 hover:text-red-700 font-medium ml-3">
+                  Quitar
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2 items-end">
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Material</label>
+            <select
+              value={materialSeleccionado}
+              onChange={(e) => setMaterialSeleccionado(Number(e.target.value) || '')}
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">Seleccionar material...</option>
+              {catalogoMaterial.map((m) => (
+                <option key={m.id} value={m.id}>{m.nombre}{m.esCritico ? ' ⚠' : ''}</option>
+              ))}
+            </select>
+          </div>
+          <div className="w-24">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Cantidad</label>
+            <input
+              type="number" min={1}
+              value={cantidadMaterial}
+              onChange={(e) => setCantidadMaterial(Math.max(1, Number(e.target.value) || 1))}
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <button
+            onClick={handleAsignarMaterial}
+            disabled={asignandoMaterial || !materialSeleccionado}
+            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-md transition-colors whitespace-nowrap">
+            {asignandoMaterial ? 'Asignando...' : 'Asignar'}
+          </button>
+        </div>
+        {errorMaterial && <p className="text-xs text-red-600 mt-2">{errorMaterial}</p>}
+      </div>
+
+      {/* ── WALKIES ── */}
+      <div className="border border-slate-200 rounded-lg p-4 bg-slate-50 mt-4">
+        <h2 className="text-sm font-semibold text-slate-800 mb-3">Walkies asignados</h2>
+        {dotacion.walkies.filter((w) => !w.devuelto).length === 0 ? (
+          <p className="text-sm text-slate-400 mb-3">No hay walkies asignados a esta dotación.</p>
+        ) : (
+          <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden mb-3">
+            {dotacion.walkies.filter((w) => !w.devuelto).map((a) => (
+              <div key={a.id} className="flex items-center justify-between px-4 py-2 bg-white hover:bg-slate-50">
+                <span className="text-sm font-mono font-semibold text-slate-900">{a.walkie.numero}</span>
+                <button
+                  onClick={() => handleDevolverWalkie(a.id)}
+                  className="text-xs text-slate-500 hover:text-slate-700 font-medium ml-3">
+                  Devolver
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2 items-end">
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Walkie disponible</label>
+            <select
+              value={walkieSeleccionado}
+              onChange={(e) => setWalkieSeleccionado(Number(e.target.value) || '')}
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">Seleccionar walkie...</option>
+              {walkiesDisponibles.map((w) => (
+                <option key={w.id} value={w.id}>{w.numero}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={handleAsignarWalkie}
+            disabled={asignandoWalkie || !walkieSeleccionado}
+            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-md transition-colors whitespace-nowrap">
+            {asignandoWalkie ? 'Asignando...' : 'Asignar'}
+          </button>
+        </div>
+        {errorWalkie && <p className="text-xs text-red-600 mt-2">{errorWalkie}</p>}
       </div>
     </div>
   );

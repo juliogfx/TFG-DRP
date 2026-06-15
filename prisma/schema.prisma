@@ -414,6 +414,7 @@ model Dotacion {
   posicion               Posicion?                    @relation(fields: [posicionId], references: [id])
   personal               AsignacionPersonalDotacion[]
   walkies                AsignacionWalkie[]
+  asignacionesMaterial   AsignacionMaterialDotacion[]
   intervencionesActivas  Intervencion[]               @relation("DotacionActiva")
   intervencionesApoyo    Intervencion[]               @relation("DotacionApoyo")
   intervencionesTraslado Intervencion[]               @relation("DotacionTraslado")
@@ -607,6 +608,7 @@ model Material {
   updatedAt        DateTime     @updatedAt @map("updated_at")
 
   asignacionesPosicion AsignacionMaterialPosicion[] @relation("AsignacionPorMaterial")
+  asignacionesDotacion AsignacionMaterialDotacion[] @relation("AsignacionPorMaterialDotacion")
   detallesRevision     DetalleRevisionMaterial[]
   alertas              AlertaMaterial[]
 
@@ -636,6 +638,29 @@ model AsignacionMaterialPosicion {
   @@index([materialId])
   @@index([puestoId])
   @@map("asignacion_material_posicion")
+}
+
+// =============================================================================
+// ASIGNACION_MATERIAL_DOTACION
+// =============================================================================
+
+/// Asignación de material a dotaciones individuales.
+/// Distinta de AsignacionMaterialPosicion que asigna material a posiciones fijas del recinto.
+model AsignacionMaterialDotacion {
+  id            Int      @id @default(autoincrement())
+  dotacionId    Int      @map("dotacion_id")
+  materialId    Int      @map("material_id")
+  cantidad      Int      @default(1)
+  observaciones String?  @db.VarChar(300)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  dotacion Dotacion @relation(fields: [dotacionId], references: [id])
+  material Material @relation("AsignacionPorMaterialDotacion", fields: [materialId], references: [id])
+
+  @@unique([dotacionId, materialId])
+  @@index([dotacionId])
+  @@map("asignacion_material_dotacion")
 }
 
 // =============================================================================
