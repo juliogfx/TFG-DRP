@@ -24,6 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/eventos',    label: 'Eventos',    hint: 'Gestión de eventos' },
   { href: '/dotaciones', label: 'Dotaciones', hint: 'Dotaciones y personal' },
   { href: '/uco',        label: 'UCO',        hint: 'Dashboard UCO' },
+  { href: '/uco/intervenciones', label: 'Intervenciones', hint: 'Registro de intervenciones' },
   { href: '/apoyo-informatico', label: 'Apoyo IT', hint: 'Catálogos y configuración' },
 ];
 
@@ -42,6 +43,7 @@ export default function Sidebar() {
    */
   function esActivo(href: string): boolean {
     if (href === '/') return pathname === '/';
+    if (href === '/uco') return pathname === '/uco';
     return pathname.startsWith(href);
   }
 
