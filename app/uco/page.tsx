@@ -22,6 +22,7 @@ import type { EventoListItem } from '@/types/evento';
 import type {
   IntervencionListItem,
   CreateIntervencionInput,
+  UpdateIntervencionInput,
   GravedadIntervencion,
   SintomatologiaItem,
 } from '@/types/intervencion';
@@ -86,6 +87,16 @@ const FORM_INTERVENCION_INICIAL = {
 };
 
 const POLLING_INTERVAL_MS = 30_000;
+
+/**
+ * Convierte ISO string a formato datetime-local (YYYY-MM-DDTHH:mm) en zona local.
+ */
+function isoToDatetimeLocal(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 function calcularModo(numDotaciones: number): ModoTarjeta {
   if (numDotaciones <= 8) return 'amplio';
@@ -369,6 +380,11 @@ function UCOContent() {
   const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
   const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
 
+  const [modalEditar, setModalEditar] = useState<IntervencionListItem | null>(null);
+  const [formEditar, setFormEditar] = useState<UpdateIntervencionInput>({});
+  const [guardando, setGuardando] = useState(false);
+  const [errorEditar, setErrorEditar] = useState<string | null>(null);
+
   const fetchEstado = useCallback(async (esPolling = false) => {
     if (!eventoSeleccionado) return;
     if (esPolling) setActualizando(true);
@@ -445,6 +461,22 @@ function UCOContent() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
+      // Cambiar dotación a EN_INTERVENCION automáticamente
+      if (body.dotacionActivaId) {
+        fetch(`/api/dotaciones/${body.dotacionActivaId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ estado: 'EN_INTERVENCION' }),
+        }).catch(console.error);
+        setEstadoUCO((prev) => prev ? {
+          ...prev,
+          dotaciones: prev.dotaciones.map((d) =>
+            d.id === body.dotacionActivaId
+              ? { ...d, estado: 'EN_INTERVENCION' as const }
+              : d
+          ),
+        } : prev);
+      }
       await fetchEstado(true);
       setShowModalIntervencion(false);
       setFormIntervencion(FORM_INTERVENCION_INICIAL);
@@ -452,6 +484,36 @@ function UCOContent() {
       setErrorIntervencion(e instanceof Error ? e.message : 'Error al registrar');
     } finally {
       setRegistrando(false);
+    }
+  }
+
+  async function handleGuardarEdicion() {
+    if (!modalEditar) return;
+    setErrorEditar(null);
+    setGuardando(true);
+    try {
+      const res = await fetch(
+        `/api/intervenciones/${modalEditar.id}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formEditar),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(
+        json.error ?? `Error ${res.status}`
+      );
+      setIntervenciones((prev) =>
+        prev.map((i) => i.id === json.data.id ? json.data : i)
+      );
+      setModalEditar(null);
+    } catch (e) {
+      setErrorEditar(
+        e instanceof Error ? e.message : 'Error al guardar'
+      );
+    } finally {
+      setGuardando(false);
     }
   }
 
@@ -570,16 +632,8 @@ function UCOContent() {
 
       {!cargando && estadoUCO && (
         <>
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold text-slate-800">{estadoUCO.nombreEvento}</h2>
-            <p className="text-sm text-slate-500">
-              {new Date(estadoUCO.fechaEvento + 'T00:00:00').toLocaleDateString('es-ES', {
-                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-              })}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-3 mb-6">
+          <div className="flex items-center flex-wrap gap-3 mb-1">
+            <h2 className="text-xl font-semibold text-slate-900">{estadoUCO.nombreEvento}</h2>
             <div className="flex items-center gap-2 bg-green-100 text-green-800 px-4 py-2 rounded-full">
               <span className="w-2 h-2 rounded-full bg-green-500" />
               <span className="text-sm font-semibold">{estadoUCO.resumen.disponibles}</span>
@@ -600,6 +654,11 @@ function UCOContent() {
               <span className="text-sm">total dotaciones</span>
             </div>
           </div>
+          <p className="text-sm text-slate-500 mb-4">
+            {new Date(estadoUCO.fechaEvento + 'T00:00:00').toLocaleDateString('es-ES', {
+              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+            })}
+          </p>
 
           {/* Contadores clicables */}
           <div className="grid grid-cols-4 gap-4 mb-2">
@@ -662,7 +721,26 @@ function UCOContent() {
             </div>
 
             {intervencionesAbiertas.length > 0 ? (
-              <TablaIntervenciones intervenciones={intervencionesAbiertas} />
+              <TablaIntervenciones
+                intervenciones={intervencionesAbiertas}
+                onRowClick={(i) => {
+                  setFormEditar({
+                    dotacionActivaId: i.dotacionActiva.id,
+                    sintomatologiaId: i.sintomatologia?.id,
+                    gravedad: i.gravedad,
+                    horaAviso: i.horaAviso,
+                    horaLlegada: i.horaLlegada,
+                    horaFinal: i.horaFinal,
+                    dotacionApoyoId: i.dotacionApoyo?.id ?? null,
+                    altaEnLugar: i.altaEnLugar,
+                    trasladoClinica: i.trasladoClinica,
+                    trasladoHospital: i.trasladoHospital,
+                    hospitalDestino: i.hospitalDestino,
+                  });
+                  setModalEditar(i);
+                  setErrorEditar(null);
+                }}
+              />
             ) : (
               <p className="text-sm text-slate-400 text-center py-4 border border-dashed border-slate-200 rounded-lg">
                 Sin intervenciones activas en este momento.
@@ -848,6 +926,122 @@ function UCOContent() {
                 className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-md transition-colors"
               >
                 {registrando ? 'Registrando...' : 'Registrar intervención'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal editar intervención (acceso directo desde el dashboard) */}
+      {modalEditar && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4" onClick={() => setModalEditar(null)}>
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-slate-900">
+                Editar intervención #{modalEditar.numeroIntervencion}
+                <span className={`ml-3 text-xs px-2 py-0.5 rounded-full font-medium ${modalEditar.abierta ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
+                  {modalEditar.abierta ? 'En curso' : 'Cerrada'}
+                </span>
+              </h2>
+            </div>
+
+            {errorEditar && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-md text-sm mb-4">{errorEditar}</div>}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Dotación activada</label>
+                <select value={formEditar.dotacionActivaId ?? ''}
+                  onChange={(e) => setFormEditar((p) => ({ ...p, dotacionActivaId: Number(e.target.value) || undefined }))}
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+                  {estadoUCO?.dotaciones.map((d) => <option key={d.id} value={d.id}>{d.codigo} — {TIPO_LABELS[d.tipo] ?? d.tipo}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Sintomatología</label>
+                <select value={formEditar.sintomatologiaId ?? ''}
+                  onChange={(e) => setFormEditar((p) => ({ ...p, sintomatologiaId: Number(e.target.value) || undefined }))}
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+                  {sintomatologias.map((s) => <option key={s.id} value={s.id}>{s.tipo}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Gravedad</label>
+                <div className="flex gap-2">
+                  {(['LEVE', 'MODERADA', 'GRAVE', 'CRITICA'] as GravedadIntervencion[]).map((g) => (
+                    <button key={g} type="button"
+                      onClick={() => setFormEditar((p) => ({ ...p, gravedad: g }))}
+                      className={`flex-1 text-xs py-1.5 rounded-md font-medium border transition-colors
+                        ${formEditar.gravedad === g ? GRAVEDAD_STYLES[g] + ' border-transparent' : 'border-slate-300 text-slate-600'}`}>
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Hora aviso</label>
+                  <input type="datetime-local" value={isoToDatetimeLocal(formEditar.horaAviso ?? null)}
+                    onChange={(e) => setFormEditar((p) => ({ ...p, horaAviso: e.target.value || null }))}
+                    className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Hora llegada</label>
+                  <input type="datetime-local" value={isoToDatetimeLocal(formEditar.horaLlegada ?? null)}
+                    onChange={(e) => setFormEditar((p) => ({ ...p, horaLlegada: e.target.value || null }))}
+                    className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Hora final</label>
+                  <input type="datetime-local" value={isoToDatetimeLocal(formEditar.horaFinal ?? null)}
+                    onChange={(e) => setFormEditar((p) => ({ ...p, horaFinal: e.target.value || null }))}
+                    className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs" />
+                </div>
+              </div>
+              <p className="text-xs text-slate-400 -mt-2">Al rellenar &quot;Hora final&quot;, la intervención pasa a estado cerrada.</p>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Dotación de apoyo</label>
+                <select value={formEditar.dotacionApoyoId ?? ''}
+                  onChange={(e) => setFormEditar((p) => ({ ...p, dotacionApoyoId: e.target.value ? Number(e.target.value) : null }))}
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+                  <option value="">Sin apoyo</option>
+                  {estadoUCO?.dotaciones.filter((d) => d.id !== formEditar.dotacionActivaId).map((d) => (
+                    <option key={d.id} value={d.id}>{d.codigo} — {TIPO_LABELS[d.tipo] ?? d.tipo}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Resolución</label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                    <input type="checkbox" checked={!!formEditar.altaEnLugar}
+                      onChange={(e) => setFormEditar((p) => ({ ...p, altaEnLugar: e.target.checked, trasladoClinica: e.target.checked ? false : p.trasladoClinica, trasladoHospital: e.target.checked ? false : p.trasladoHospital }))} />
+                    Alta en el lugar
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                    <input type="checkbox" checked={!!formEditar.trasladoClinica}
+                      onChange={(e) => setFormEditar((p) => ({ ...p, trasladoClinica: e.target.checked, altaEnLugar: e.target.checked ? false : p.altaEnLugar, trasladoHospital: e.target.checked ? false : p.trasladoHospital }))} />
+                    Traslado a clínica
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                    <input type="checkbox" checked={!!formEditar.trasladoHospital}
+                      onChange={(e) => setFormEditar((p) => ({ ...p, trasladoHospital: e.target.checked, altaEnLugar: e.target.checked ? false : p.altaEnLugar, trasladoClinica: e.target.checked ? false : p.trasladoClinica }))} />
+                    Traslado hospitalario
+                  </label>
+                  {formEditar.trasladoHospital && (
+                    <input type="text" placeholder="Centro hospitalario de destino" value={formEditar.hospitalDestino ?? ''}
+                      onChange={(e) => setFormEditar((p) => ({ ...p, hospitalDestino: e.target.value || null }))}
+                      className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm ml-6" />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end mt-6">
+              <button onClick={() => setModalEditar(null)} disabled={guardando}
+                className="border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-4 py-2 rounded-md transition-colors disabled:opacity-50">Cancelar</button>
+              <button onClick={handleGuardarEdicion} disabled={guardando}
+                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-md transition-colors">
+                {guardando ? 'Guardando...' : 'Guardar cambios'}
               </button>
             </div>
           </div>
