@@ -14,9 +14,9 @@
 
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { EstadoUCO, DotacionEstado } from '@/types/uco';
 import type { EventoListItem } from '@/types/evento';
 import type {
@@ -345,10 +345,14 @@ function TablaIntervenciones({
   );
 }
 
-export default function UCOPage() {
+function UCOContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const eventoIdParam = searchParams.get('eventoId');
   const [eventos, setEventos] = useState<EventoListItem[]>([]);
-  const [eventoSeleccionado, setEventoSeleccionado] = useState<number | null>(null);
+  const [eventoSeleccionado, setEventoSeleccionado] = useState<number | null>(
+    eventoIdParam ? Number(eventoIdParam) : null
+  );
   const [estadoUCO, setEstadoUCO] = useState<EstadoUCO | null>(null);
   const [intervenciones, setIntervenciones] = useState<IntervencionListItem[]>([]);
   const [sintomatologias, setSintomatologias] = useState<SintomatologiaItem[]>([]);
@@ -850,5 +854,13 @@ export default function UCOPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function UCOPage() {
+  return (
+    <Suspense fallback={<div className="text-center py-12 text-slate-500">Cargando...</div>}>
+      <UCOContent />
+    </Suspense>
   );
 }

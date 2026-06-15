@@ -276,7 +276,7 @@ function IntervencionesContent() {
   return (
     <div>
       <div className="mb-4">
-        <Link href="/uco" className="text-sm text-slate-500 hover:text-slate-700">
+        <Link href={`/uco${eventoId ? `?eventoId=${eventoId}` : ''}`} className="text-sm text-slate-500 hover:text-slate-700">
           ← Volver al dashboard UCO
         </Link>
       </div>

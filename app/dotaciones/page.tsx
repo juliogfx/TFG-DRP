@@ -186,6 +186,13 @@ function DotacionesContent() {
     setFiltroFechaDotHasta('');
   }
 
+  const eventosFiltrados = eventos.filter((ev) => {
+    if (filtroNombreEvento && !ev.nombre.toLowerCase().includes(filtroNombreEvento.toLowerCase())) return false;
+    if (filtroFechaDotDesde && ev.fecha < filtroFechaDotDesde) return false;
+    if (filtroFechaDotHasta && ev.fecha > filtroFechaDotHasta) return false;
+    return true;
+  });
+
   const dotacionesFiltradas = dotaciones.filter((d) => {
     if (filtroCodigo && !d.codigo.toLowerCase().includes(filtroCodigo.toLowerCase())) return false;
     if (filtroTipoDot && d.tipo !== filtroTipoDot) return false;
@@ -227,7 +234,7 @@ function DotacionesContent() {
           className="w-full max-w-md border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">Todos los eventos</option>
-          {eventos.map((ev) => (
+          {eventosFiltrados.map((ev) => (
             <option key={ev.id} value={ev.id}>
               {ev.nombre} — {new Date(ev.fecha + 'T00:00:00').toLocaleDateString('es-ES')}
             </option>

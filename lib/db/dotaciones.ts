@@ -36,6 +36,8 @@ const eventoDetalleSelect = {
   fecha: true,
   horaIncorporacionSspp: true,
   horaFinalizacionSspp: true,
+  horaInicioEvento: true,
+  horaFinEvento: true,
 } as const;
 const personaSelect = { id: true, nombreCompleto: true, tipo: true, titulacion: { select: { nombre: true } }, telefono: true } as const;
 const asignacionSelect = {
@@ -222,6 +224,8 @@ export async function getDotacionById(id: number): Promise<DotacionDetalle | nul
       fecha: dotacion.evento.fecha.toISOString().substring(0, 10),
       horaIncorporacionSspp: dotacion.evento.horaIncorporacionSspp?.toISOString() ?? null,
       horaFinalizacionSspp: dotacion.evento.horaFinalizacionSspp?.toISOString() ?? null,
+      horaInicioEvento: dotacion.evento.horaInicioEvento ?? null,
+      horaFinEvento: dotacion.evento.horaFinEvento ?? null,
     },
     numeroPersonasAsignadas: dotacion.personal.length,
     personal: dotacion.personal.map(serializarAsignacion),
@@ -438,15 +442,35 @@ export async function asignarWalkie(
       throw new Error(`Walkie no disponible (estado: ${walkie.estado})`);
     }
 
-    const creada = await tx.asignacionWalkie.create({
-      data: { walkieId, dotacionId, eventoId },
-      select: walkieSelect,
+    const existente = await tx.asignacionWalkie.findUnique({
+      where: { walkieId_eventoId: { walkieId, eventoId } },
+      select: { id: true, devuelto: true },
     });
+
+    let asignacionId: number;
+
+    if (existente && existente.devuelto) {
+      await tx.asignacionWalkie.update({
+        where: { id: existente.id },
+        data: {
+          devuelto: false,
+          fechaDevolucion: null,
+          dotacionId,
+          fechaAsignacion: new Date(),
+        },
+      });
+      asignacionId = existente.id;
+    } else {
+      const creada = await tx.asignacionWalkie.create({
+        data: { walkieId, dotacionId, eventoId },
+        select: { id: true },
+      });
+      asignacionId = creada.id;
+    }
 
     await tx.walkie.update({ where: { id: walkieId }, data: { estado: 'ASIGNADO' } });
 
-    // Releer para reflejar el estado actualizado
-    return tx.asignacionWalkie.findUniqueOrThrow({ where: { id: creada.id }, select: walkieSelect });
+    return tx.asignacionWalkie.findUniqueOrThrow({ where: { id: asignacionId }, select: walkieSelect });
   });
 
   return {
@@ -481,15 +505,11 @@ export async function devolverWalkie(asignacionId: number): Promise<void> {
       data: { devuelto: true, fechaDevolucion: new Date() },
     });
 
-    // Si no quedan asignaciones activas en ningún evento para este walkie, marcarlo DISPONIBLE
     const otrasActivas = await tx.asignacionWalkie.count({
       where: { walkieId: asignacion.walkieId, devuelto: false },
     });
     if (otrasActivas === 0) {
-      const w = await tx.walkie.findUnique({ where: { id: asignacion.walkieId }, select: { estado: true } });
-      if (w && w.estado === 'ASIGNADO') {
-        await tx.walkie.update({ where: { id: asignacion.walkieId }, data: { estado: 'DISPONIBLE' } });
-      }
+      await tx.walkie.update({ where: { id: asignacion.walkieId }, data: { estado: 'DISPONIBLE' } });
     }
   });
 }

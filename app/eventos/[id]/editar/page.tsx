@@ -71,6 +71,8 @@ export default function EditarEventoPage() {
           equipoVisitanteId: evento.equipoVisitante?.id ?? undefined,
           directorMedico: evento.directorMedico ?? '',
           observaciones: evento.observaciones ?? '',
+          horaInicioEvento: evento.horaInicioEvento ?? '',
+          horaFinEvento: evento.horaFinEvento ?? '',
         });
 
         setUbicaciones(dataUbic.data ?? []);
@@ -287,20 +289,7 @@ export default function EditarEventoPage() {
             <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de evento</label>
             <select
               value={form.tipoEventoId ?? ''}
-              onChange={(e) => {
-                const nuevoTipoId = e.target.value ? Number(e.target.value) : undefined;
-                const nuevoTipo = tiposEvento.find((t) => t.id === nuevoTipoId);
-                const temporada = calcularTemporada(form.fecha ?? '', nuevoTipo);
-                setForm((prev) => ({
-                  ...prev,
-                  tipoEventoId: nuevoTipoId,
-                  equipoLocalId: undefined,
-                  equipoVisitanteId: undefined,
-                  rival: '',
-                  nombre: '',
-                  ...(temporada && { temporada }),
-                }));
-              }}
+              onChange={(e) => actualizarCampo('tipoEventoId', e.target.value)}
               className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Seleccionar...</option>
@@ -408,6 +397,19 @@ export default function EditarEventoPage() {
           <textarea value={form.observaciones ?? ''} onChange={(e) => actualizarCampo('observaciones', e.target.value)}
             rows={3} placeholder="Notas adicionales sobre el evento..."
             className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Hora inicio del evento</label>
+            <input type="time" value={form.horaInicioEvento ?? ''} onChange={(e) => actualizarCampo('horaInicioEvento', e.target.value)}
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Hora fin del evento</label>
+            <input type="time" value={form.horaFinEvento ?? ''} onChange={(e) => actualizarCampo('horaFinEvento', e.target.value)}
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
         </div>
 
         <div className="flex gap-3 pt-2">

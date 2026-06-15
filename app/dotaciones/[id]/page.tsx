@@ -122,10 +122,20 @@ export default function DotacionDetallePage() {
   useEffect(() => {
     if (!dotacion) return;
     if (!turnoInicio) {
-      setTurnoInicio(calcularTurnoPropuesto(dotacion.evento.fecha, dotacion.evento.horaIncorporacionSspp));
+      const horaIso = dotacion.evento.horaIncorporacionSspp;
+      const horaHHMM = dotacion.evento.horaInicioEvento;
+      setTurnoInicio(
+        calcularTurnoPropuesto(dotacion.evento.fecha, horaIso)
+        || (horaHHMM ? `${dotacion.evento.fecha}T${horaHHMM}` : '')
+      );
     }
     if (!turnoFin) {
-      setTurnoFin(calcularTurnoPropuesto(dotacion.evento.fecha, dotacion.evento.horaFinalizacionSspp));
+      const horaIso = dotacion.evento.horaFinalizacionSspp;
+      const horaHHMM = dotacion.evento.horaFinEvento;
+      setTurnoFin(
+        calcularTurnoPropuesto(dotacion.evento.fecha, horaIso)
+        || (horaHHMM ? `${dotacion.evento.fecha}T${horaHHMM}` : '')
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dotacion]);
@@ -167,8 +177,15 @@ export default function DotacionDetallePage() {
       setRolSeleccionado('');
       // Reponer la propuesta de turno tras cada asignación
       if (dataDotacion.data) {
-        setTurnoInicio(calcularTurnoPropuesto(dataDotacion.data.evento.fecha, dataDotacion.data.evento.horaIncorporacionSspp));
-        setTurnoFin(calcularTurnoPropuesto(dataDotacion.data.evento.fecha, dataDotacion.data.evento.horaFinalizacionSspp));
+        const ev = dataDotacion.data.evento;
+        setTurnoInicio(
+          calcularTurnoPropuesto(ev.fecha, ev.horaIncorporacionSspp)
+          || (ev.horaInicioEvento ? `${ev.fecha}T${ev.horaInicioEvento}` : '')
+        );
+        setTurnoFin(
+          calcularTurnoPropuesto(ev.fecha, ev.horaFinalizacionSspp)
+          || (ev.horaFinEvento ? `${ev.fecha}T${ev.horaFinEvento}` : '')
+        );
       }
     } catch (e) {
       setErrorAsignacion(e instanceof Error ? e.message : 'Error al asignar');
@@ -324,7 +341,7 @@ export default function DotacionDetallePage() {
         setWalkiesDisponibles((prev) => [
           ...prev,
           { ...walkieDevuelto.walkie, estado: 'DISPONIBLE' as const },
-        ]);
+        ].sort((a, b) => a.numero.localeCompare(b.numero)));
       }
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Error');

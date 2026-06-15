@@ -40,6 +40,8 @@ export interface EventoDetalle {
   observaciones: string | null;
   horaIncorporacionSspp: string | null;
   horaFinalizacionSspp: string | null;
+  horaInicioEvento: string | null;
+  horaFinEvento: string | null;
   dotaciones: { id: number; codigo: string; tipo: string; estado: string; personalMinimo: number; }[];
   createdAt: string;
   updatedAt: string;
@@ -61,6 +63,8 @@ export interface CreateEventoInput {
   equipoVisitanteId?: number;
   directorMedico?: string;
   observaciones?: string;
+  horaInicioEvento?: string;
+  horaFinEvento?: string;
 }
 
 export interface UpdateEventoInput {
@@ -80,6 +84,8 @@ export interface UpdateEventoInput {
   observaciones?: string;
   horaIncorporacionSspp?: string;
   horaFinalizacionSspp?: string;
+  horaInicioEvento?: string;
+  horaFinEvento?: string;
 }
 
 export interface ApiResponse<T> {

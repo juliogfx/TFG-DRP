@@ -85,6 +85,8 @@ export interface DotacionDetalle extends DotacionListItem {
     fecha: string;
     horaIncorporacionSspp: string | null;
     horaFinalizacionSspp: string | null;
+    horaInicioEvento: string | null;
+    horaFinEvento: string | null;
   };
   createdAt: string;
   updatedAt: string;

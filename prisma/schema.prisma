@@ -327,6 +327,8 @@ model Evento {
   eventoOrigenId        Int?      @map("evento_origen_id")
   horaIncorporacionSspp DateTime? @map("hora_incorporacion_sspp")
   horaFinalizacionSspp  DateTime? @map("hora_finalizacion_sspp")
+  horaInicioEvento      String?   @map("hora_inicio_evento") @db.VarChar(5)
+  horaFinEvento         String?   @map("hora_fin_evento") @db.VarChar(5)
   horaInicioUco         DateTime? @map("hora_inicio_uco")
   directorMedico        String?   @map("director_medico") @db.VarChar(150)
   promotor              String?   @db.VarChar(200)

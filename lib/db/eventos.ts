@@ -66,7 +66,7 @@ export async function getEventoById(id: number): Promise<EventoDetalle | null> {
       id: true, nombre: true, fecha: true, rival: true,
       aforoPrevisto: true, aforoEstimado: true, temporada: true,
       directorMedico: true, observaciones: true,
-      horaIncorporacionSspp: true, horaFinalizacionSspp: true,
+      horaIncorporacionSspp: true, horaFinalizacionSspp: true, horaInicioEvento: true, horaFinEvento: true,
       createdAt: true, updatedAt: true,
       ubicacion: { select: ubicacionDetalleSelect },
       tipoEvento: { select: tipoEventoSelect },
@@ -89,6 +89,8 @@ export async function getEventoById(id: number): Promise<EventoDetalle | null> {
     fecha: evento.fecha.toISOString().split('T')[0],
     horaIncorporacionSspp: evento.horaIncorporacionSspp?.toISOString() ?? null,
     horaFinalizacionSspp: evento.horaFinalizacionSspp?.toISOString() ?? null,
+    horaInicioEvento: evento.horaInicioEvento ?? null,
+    horaFinEvento: evento.horaFinEvento ?? null,
     createdAt: evento.createdAt.toISOString(),
     updatedAt: evento.updatedAt.toISOString(),
     equipoLocal: evento.equipoLocal ?? null,
@@ -124,6 +126,8 @@ export async function createEvento(input: CreateEventoInput): Promise<EventoDeta
       equipoVisitanteId: input.equipoVisitanteId ?? null,
       directorMedico: input.directorMedico ?? null,
       observaciones: input.observaciones ?? null,
+      horaInicioEvento: input.horaInicioEvento ?? null,
+      horaFinEvento: input.horaFinEvento ?? null,
     },
   });
   return (await getEventoById(evento.id))!;
@@ -161,6 +165,8 @@ export async function updateEvento(id: number, input: UpdateEventoInput): Promis
       ...(input.observaciones !== undefined && { observaciones: input.observaciones }),
       ...(input.horaIncorporacionSspp !== undefined && { horaIncorporacionSspp: new Date(input.horaIncorporacionSspp) }),
       ...(input.horaFinalizacionSspp !== undefined && { horaFinalizacionSspp: new Date(input.horaFinalizacionSspp) }),
+      ...(input.horaInicioEvento !== undefined && { horaInicioEvento: input.horaInicioEvento || null }),
+      ...(input.horaFinEvento !== undefined && { horaFinEvento: input.horaFinEvento || null }),
     },
   });
   return (await getEventoById(id))!;
