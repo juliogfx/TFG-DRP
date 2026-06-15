@@ -370,6 +370,7 @@ function UCOContent() {
   const [busquedaEvento, setBusquedaEvento] = useState('');
   const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
   const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
+  const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
 
   const [modalEditar, setModalEditar] = useState<IntervencionListItem | null>(null);
   const [formEditar, setFormEditar] = useState<UpdateIntervencionInput>({});
@@ -532,87 +533,120 @@ function UCOContent() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <div>
+        <div className="flex items-center gap-3 flex-wrap">
           <h1 className="text-2xl font-semibold text-slate-900">Dashboard UCO</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Vista operativa en tiempo real</p>
+          <span className="text-sm text-slate-400">Vista operativa en tiempo real</span>
+          <span className="text-sm text-slate-400">·</span>
+          <span className="text-sm text-slate-400">Refresco cada {POLLING_INTERVAL_MS / 1000}s</span>
         </div>
-        <div className="text-right">
-          {actualizando && <span className="text-xs text-blue-600 font-medium animate-pulse">↻ Actualizando...</span>}
-          {ultimaActualizacion && !actualizando && (
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+          </span>
+          {actualizando ? (
+            <span className="text-xs text-blue-600 font-medium animate-pulse">↻ Actualizando...</span>
+          ) : ultimaActualizacion ? (
             <span className="text-xs text-slate-400">Actualizado a las {ultimaActualizacion}</span>
-          )}
-          <p className="text-xs text-slate-400 mt-0.5">Refresco automático cada {POLLING_INTERVAL_MS / 1000}s</p>
+          ) : null}
         </div>
       </div>
 
-      <div className="mb-6 p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={busquedaEvento}
-            onChange={(e) => setBusquedaEvento(e.target.value)}
-            placeholder="Buscar evento por nombre..."
-            className="flex-1 border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <select
-            value={eventoSeleccionado ?? ''}
-            onChange={(e) => {
-              const nuevoEvento = e.target.value ? Number(e.target.value) : null;
-              setEventoSeleccionado(nuevoEvento);
-              setBusquedaEvento('');
-              if (!nuevoEvento) {
-                setEstadoUCO(null);
-                setIntervenciones([]);
-              }
-            }}
-            className="flex-1 max-w-xs border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">Selecciona un evento...</option>
-            {eventosFiltrados.map((ev) => (
-              <option key={ev.id} value={ev.id}>
-                {ev.nombre} — {new Date(ev.fecha + 'T00:00:00').toLocaleDateString('es-ES')}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex gap-2 items-center">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Desde</label>
-            <input
-              type="date"
-              value={filtroFechaDesde}
-              onChange={(e) => setFiltroFechaDesde(e.target.value)}
-              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Hasta</label>
-            <input
-              type="date"
-              value={filtroFechaHasta}
-              onChange={(e) => setFiltroFechaHasta(e.target.value)}
-              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+      <div className="mb-6">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 text-sm text-slate-600 font-medium">
+            {eventoSeleccionado && eventos.find(e => e.id === eventoSeleccionado) ? (
+              <span>📅 {eventos.find(e => e.id === eventoSeleccionado)?.nombre}</span>
+            ) : (
+              <span className="text-slate-400">Ningún evento seleccionado</span>
+            )}
           </div>
           <button
-            onClick={() => {
-              setBusquedaEvento('');
-              setFiltroFechaDesde('');
-              setFiltroFechaHasta('');
-              setEventoSeleccionado(null);
-              setEstadoUCO(null);
-              setIntervenciones([]);
-            }}
-            className="self-end text-xs text-blue-600 hover:text-blue-800 font-medium pb-1.5"
+            onClick={() => setFiltrosAbiertos(v => !v)}
+            title={filtrosAbiertos ? 'Ocultar filtros' : 'Buscar evento'}
+            className={`p-2 rounded-md border transition-colors ${
+              filtrosAbiertos
+                ? 'bg-blue-50 border-blue-300 text-blue-600'
+                : 'border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-700'
+            }`}
           >
-            Limpiar
+            🔍
           </button>
-          {eventos.length > 0 && (
-            <span className="self-end text-xs text-slate-400 pb-1.5">
-              {eventosFiltrados.length} de {eventos.length} eventos
-            </span>
-          )}
         </div>
+
+        {filtrosAbiertos && (
+          <div className="mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={busquedaEvento}
+                onChange={(e) => setBusquedaEvento(e.target.value)}
+                placeholder="Buscar evento por nombre..."
+                className="flex-1 border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <select
+                value={eventoSeleccionado ?? ''}
+                onChange={(e) => {
+                  const nuevoEvento = e.target.value ? Number(e.target.value) : null;
+                  setEventoSeleccionado(nuevoEvento);
+                  setBusquedaEvento('');
+                  if (!nuevoEvento) {
+                    setEstadoUCO(null);
+                    setIntervenciones([]);
+                  }
+                  if (nuevoEvento) setFiltrosAbiertos(false);
+                }}
+                className="flex-1 max-w-xs border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Selecciona un evento...</option>
+                {eventosFiltrados.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.nombre} — {new Date(ev.fecha + 'T00:00:00').toLocaleDateString('es-ES')}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2 items-center">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Desde</label>
+                <input
+                  type="date"
+                  value={filtroFechaDesde}
+                  onChange={(e) => setFiltroFechaDesde(e.target.value)}
+                  className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Hasta</label>
+                <input
+                  type="date"
+                  value={filtroFechaHasta}
+                  onChange={(e) => setFiltroFechaHasta(e.target.value)}
+                  className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <button
+                onClick={() => {
+                  setBusquedaEvento('');
+                  setFiltroFechaDesde('');
+                  setFiltroFechaHasta('');
+                  setEventoSeleccionado(null);
+                  setEstadoUCO(null);
+                  setIntervenciones([]);
+                  setFiltrosAbiertos(false);
+                }}
+                className="self-end text-xs text-blue-600 hover:text-blue-800 font-medium pb-1.5"
+              >
+                Limpiar
+              </button>
+              {eventos.length > 0 && (
+                <span className="self-end text-xs text-slate-400 pb-1.5">
+                  {eventosFiltrados.length} de {eventos.length} eventos
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -651,8 +685,12 @@ function UCOContent() {
             })}
           </p>
 
+          <div className="flex gap-6 items-start">
+            {/* LEFT column — counters + intervenciones en curso */}
+            <div className="w-2/5 flex-shrink-0">
+
           {/* Contadores clicables */}
-          <div className="grid grid-cols-4 gap-4 mb-2">
+          <div className="grid grid-cols-4 gap-4 mb-6">
             <button
               onClick={() => router.push(urlIntervenciones())}
               title="Ver intervenciones"
@@ -686,11 +724,6 @@ function UCOContent() {
               <p className="text-xs text-slate-500 mt-1">Traslados hospital</p>
             </button>
           </div>
-          <p className="text-xs text-slate-400 mb-8">
-            Los contadores reflejan las intervenciones médicas registradas en el sistema durante el evento.
-            El estado operativo de las dotaciones se gestiona desde el módulo Dotaciones.
-          </p>
-
           <div className="mb-8">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-lg font-semibold text-slate-800">Intervenciones en curso</h2>
@@ -739,26 +772,32 @@ function UCOContent() {
             )}
           </div>
 
-          <div className="flex items-center mb-3">
-            <h2 className="text-lg font-semibold text-slate-800">Estado de dotaciones</h2>
-            <span className="text-xs text-slate-400 ml-2">
-              ({numDotaciones} dotaciones · modo {modoTarjeta})
-            </span>
-          </div>
-          {estadoUCO.dotaciones.length === 0 ? (
-            <div className="text-center py-12 text-slate-400">No hay dotaciones activas para este evento.</div>
-          ) : (
-            <div className={GRID_CLASSES[modoTarjeta]}>
-              {estadoUCO.dotaciones.map((dotacion) => (
-                <TarjetaDotacion
-                  key={dotacion.id}
-                  dotacion={dotacion}
-                  eventoId={eventoSeleccionado!}
-                  modo={modoTarjeta}
-                />
-              ))}
             </div>
-          )}
+
+            {/* RIGHT column — dotaciones grid */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center mb-3">
+                <h2 className="text-lg font-semibold text-slate-800">Estado de dotaciones</h2>
+                <span className="text-xs text-slate-400 ml-2">
+                  ({numDotaciones} dotaciones · modo {modoTarjeta})
+                </span>
+              </div>
+              {estadoUCO.dotaciones.length === 0 ? (
+                <div className="text-center py-12 text-slate-400">No hay dotaciones activas para este evento.</div>
+              ) : (
+                <div className={GRID_CLASSES[modoTarjeta]}>
+                  {estadoUCO.dotaciones.map((dotacion) => (
+                    <TarjetaDotacion
+                      key={dotacion.id}
+                      dotacion={dotacion}
+                      eventoId={eventoSeleccionado!}
+                      modo={modoTarjeta}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </>
       )}
 
