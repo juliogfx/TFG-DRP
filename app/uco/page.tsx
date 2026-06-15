@@ -400,7 +400,7 @@ export default function UCOPage() {
         const jsonSint = await resSint.json();
         setEventos(jsonEventos.data);
         setSintomatologias(jsonSint.data ?? []);
-        if (jsonEventos.data.length > 0) setEventoSeleccionado(jsonEventos.data[0].id);
+
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Error al cargar eventos');
       }
@@ -500,8 +500,13 @@ export default function UCOPage() {
           <select
             value={eventoSeleccionado ?? ''}
             onChange={(e) => {
-              setEventoSeleccionado(e.target.value ? Number(e.target.value) : null);
+              const nuevoEvento = e.target.value ? Number(e.target.value) : null;
+              setEventoSeleccionado(nuevoEvento);
               setBusquedaEvento('');
+              if (!nuevoEvento) {
+                setEstadoUCO(null);
+                setIntervenciones([]);
+              }
             }}
             className="flex-1 max-w-xs border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
