@@ -39,6 +39,20 @@ const MODULOS: ModuloCard[] = [
     icono: '📡',
     color: 'border-orange-500',
   },
+  {
+    href: '/uco/intervenciones',
+    titulo: 'Intervenciones',
+    descripcion: 'Registro y seguimiento de intervenciones médicas durante el operativo. Historial completo con filtros por dotación, gravedad y resolución.',
+    icono: '🏥',
+    color: 'border-red-500',
+  },
+  {
+    href: '/apoyo-informatico',
+    titulo: 'Apoyo IT — Catálogos',
+    descripcion: 'Gestión de catálogos del sistema: titulaciones sanitarias y configuración general de la plataforma.',
+    icono: '⚙️',
+    color: 'border-purple-500',
+  },
 ];
 
 /**
@@ -57,7 +71,7 @@ export default function HomePage() {
         </p>
         <div className="mt-4 flex items-center gap-2">
           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-            PoC — Prueba de Concepto
+            v0.3 — Beta
           </span>
           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
             Temporada 2025-26
@@ -65,7 +79,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
         {MODULOS.map((modulo) => (
           <Link
             key={modulo.href}
@@ -88,11 +102,15 @@ export default function HomePage() {
           </div>
           <div>
             <p className="font-medium text-slate-700">Base de datos</p>
-            <p>Supabase (eu-west-1) · Schema v4.2</p>
+            <p>Supabase (eu-west-1) · Schema v4.3</p>
           </div>
           <div>
             <p className="font-medium text-slate-700">Versión</p>
-            <p>PoC v0.1 · TFG UNIR 2025-26</p>
+            <p>v0.3 · TFG UNIR 2025-26</p>
+          </div>
+          <div>
+            <p className="font-medium text-slate-700">Módulos activos</p>
+            <p>Eventos · Dotaciones · UCO · Intervenciones · Apoyo IT</p>
           </div>
         </div>
       </div>
