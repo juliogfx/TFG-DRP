@@ -306,7 +306,7 @@ function IntervencionesContent() {
         </div>
       </div>
 
-      {/* Bloque de filtros de evento: búsqueda + select + fechas + limpiar */}
+      {/* Bloque unificado de filtros — fila 1: evento, fila 2: fechas + filtros intervenciones */}
       <div className="mb-6 p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
         <div className="flex gap-2">
           <input
@@ -338,7 +338,7 @@ function IntervencionesContent() {
             ))}
           </select>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-end">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Desde</label>
             <input
@@ -357,17 +357,73 @@ function IntervencionesContent() {
               className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Estado</label>
+            <select
+              value={filtroEstado}
+              onChange={(e) => setFiltroEstado(e.target.value as typeof filtroEstado)}
+              disabled={!eventoId}
+              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="TODAS">Todas</option>
+              <option value="EN_CURSO">En curso</option>
+              <option value="CERRADAS">Cerradas</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Dotación</label>
+            <select
+              value={filtroDotacion}
+              onChange={(e) => setFiltroDotacion(e.target.value ? Number(e.target.value) : '')}
+              disabled={!eventoId}
+              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="">Todas</option>
+              {dotaciones.map((d) => (
+                <option key={d.id} value={d.id}>{d.codigo}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Gravedad</label>
+            <select
+              value={filtroGravedad}
+              onChange={(e) => setFiltroGravedad(e.target.value as typeof filtroGravedad)}
+              disabled={!eventoId}
+              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="TODAS">Todas</option>
+              <option value="LEVE">Leve</option>
+              <option value="MODERADA">Moderada</option>
+              <option value="GRAVE">Grave</option>
+              <option value="CRITICA">Crítica</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Resolución</label>
+            <select
+              value={filtroResolucion}
+              onChange={(e) => setFiltroResolucion(e.target.value as typeof filtroResolucion)}
+              disabled={!eventoId}
+              className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="TODAS">Todas</option>
+              <option value="alta">Alta en lugar</option>
+              <option value="clinica">Traslado clínica</option>
+              <option value="hospital">Traslado hospital</option>
+            </select>
+          </div>
           <button
             onClick={limpiarTodo}
             className="self-end text-xs text-blue-600 hover:text-blue-800 font-medium pb-1.5"
           >
             Limpiar
           </button>
-          {eventos.length > 0 && (
-            <span className="self-end text-xs text-slate-400 pb-1.5">
-              {eventosFiltrados.length} de {eventos.length} eventos
-            </span>
-          )}
+          <span className="self-end text-xs text-slate-400 pb-1.5 ml-auto">
+            {eventoId
+              ? `${filtradas.length} de ${intervenciones.length} intervenciones`
+              : `${eventosFiltrados.length} de ${eventos.length} eventos`}
+          </span>
         </div>
       </div>
 
@@ -377,78 +433,6 @@ function IntervencionesContent() {
 
       {eventoId && (
         <>
-          {/* Filtros */}
-          <div className="flex flex-wrap gap-3 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Estado</label>
-              <select
-                value={filtroEstado}
-                onChange={(e) => setFiltroEstado(e.target.value as typeof filtroEstado)}
-                className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="TODAS">Todas</option>
-                <option value="EN_CURSO">En curso</option>
-                <option value="CERRADAS">Cerradas</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Dotación</label>
-              <select
-                value={filtroDotacion}
-                onChange={(e) => setFiltroDotacion(e.target.value ? Number(e.target.value) : '')}
-                className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Todas</option>
-                {dotaciones.map((d) => (
-                  <option key={d.id} value={d.id}>{d.codigo}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Gravedad</label>
-              <select
-                value={filtroGravedad}
-                onChange={(e) => setFiltroGravedad(e.target.value as typeof filtroGravedad)}
-                className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="TODAS">Todas</option>
-                <option value="LEVE">Leve</option>
-                <option value="MODERADA">Moderada</option>
-                <option value="GRAVE">Grave</option>
-                <option value="CRITICA">Crítica</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Resolución</label>
-              <select
-                value={filtroResolucion}
-                onChange={(e) => setFiltroResolucion(e.target.value as typeof filtroResolucion)}
-                className="border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="TODAS">Todas</option>
-                <option value="alta">Alta en lugar</option>
-                <option value="clinica">Traslado clínica</option>
-                <option value="hospital">Traslado hospital</option>
-              </select>
-            </div>
-            <div className="ml-auto self-end flex items-center gap-3">
-              <button
-                onClick={() => {
-                  setFiltroEstado('TODAS');
-                  setFiltroDotacion('');
-                  setFiltroGravedad('TODAS');
-                  setFiltroResolucion('TODAS');
-                }}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-              >
-                Limpiar filtros
-              </button>
-              <span className="text-xs text-slate-500">
-                {filtradas.length} de {intervenciones.length} intervenciones
-              </span>
-            </div>
-          </div>
-
           {/* Tabla */}
           {filtradas.length === 0 ? (
             <p className="text-sm text-slate-400 text-center py-12 border border-dashed border-slate-200 rounded-lg">
