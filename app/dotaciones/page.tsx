@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { DotacionListItem, TipoDotacion } from '@/types/dotacion';
 import type { EventoListItem } from '@/types/evento';
@@ -39,6 +40,7 @@ function DotacionesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const eventoIdParam = searchParams.get('eventoId');
+  const estadoDotParam = searchParams.get('estadoDot');
 
   const [eventos, setEventos] = useState<EventoListItem[]>([]);
   const [eventoSeleccionado, setEventoSeleccionado] = useState<number | null>(
@@ -63,7 +65,7 @@ function DotacionesContent() {
   const [filtroCodigo, setFiltroCodigo] = useState('');
   const [filtroTipoDot, setFiltroTipoDot] = useState('');
   const [filtroIndicativo, setFiltroIndicativo] = useState('');
-  const [filtroEstadoDot, setFiltroEstadoDot] = useState('');
+  const [filtroEstadoDot, setFiltroEstadoDot] = useState(estadoDotParam ?? '');
 
   // Filtro por estado de evento (afecta a la query a /api/eventos).
   // Si entramos con eventoId por URL, abrimos el filtro a TODOS para no
@@ -110,13 +112,22 @@ function DotacionesContent() {
     cargarDotaciones();
   }, [eventoSeleccionado]);
 
-  // Resetear solo los filtros dependientes del evento al cambiarlo
+  // Resetear solo los filtros dependientes del evento al cambiarlo.
+  // NO incluye filtroEstadoDot porque ese viene del URL (param ?estadoDot=)
+  // — se gestiona en su propio useEffect debajo para no clobberear el
+  // deep-link que llega desde el bloque CL0/CL2/CL3 del dashboard UCO.
   useEffect(() => {
     setFiltroCodigo('');
     setFiltroTipoDot('');
     setFiltroIndicativo('');
-    setFiltroEstadoDot('');
   }, [eventoSeleccionado]);
+
+  // Sync filtroEstadoDot con el param ?estadoDot= cada vez que cambia la URL.
+  // Cubre tanto el mount (después del reset de filtros) como navegaciones
+  // suaves entre CL0 → CL2 → CL3 desde el dashboard.
+  useEffect(() => {
+    setFiltroEstadoDot(estadoDotParam ?? '');
+  }, [estadoDotParam]);
 
   async function handleEliminar(id: number, codigo: string) {
     if (!window.confirm(`¿Eliminar la dotación "${codigo}"?`)) return;
@@ -223,6 +234,17 @@ function DotacionesContent() {
 
   return (
     <div>
+      {eventoIdParam && (
+        <div className="mb-4">
+          <Link
+            href={`/uco?eventoId=${eventoIdParam}`}
+            className="text-sm text-slate-500 hover:text-slate-700"
+          >
+            ← Volver al dashboard UCO
+          </Link>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Dotaciones</h1>

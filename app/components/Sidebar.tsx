@@ -77,10 +77,6 @@ export default function Sidebar() {
           );
         })}
       </nav>
-
-      <footer className="text-xs pt-4 border-t border-slate-300 text-slate-500">
-        v4.3 · 2026
-      </footer>
     </aside>
   );
 }

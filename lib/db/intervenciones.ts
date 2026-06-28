@@ -26,6 +26,7 @@ const intervencionSelect = {
   sintomatologia: { select: { id: true, tipo: true } },
   dotacionActiva: { select: { id: true, codigo: true, tipo: true } },
   dotacionApoyo: { select: { id: true, codigo: true } },
+  dotacionTraslado: { select: { id: true, codigo: true } },
 } as const;
 
 function serializarIntervencion(i: {
@@ -42,6 +43,7 @@ function serializarIntervencion(i: {
   sintomatologia: { id: number; tipo: string } | null;
   dotacionActiva: { id: number; codigo: string; tipo: string };
   dotacionApoyo: { id: number; codigo: string } | null;
+  dotacionTraslado: { id: number; codigo: string } | null;
 }): IntervencionListItem {
   return {
     id: i.id,
@@ -57,19 +59,29 @@ function serializarIntervencion(i: {
     sintomatologia: i.sintomatologia,
     dotacionActiva: i.dotacionActiva,
     dotacionApoyo: i.dotacionApoyo,
+    dotacionTraslado: i.dotacionTraslado,
     abierta: i.horaFinal === null,
   };
 }
 
 /**
- * Devuelve todas las intervenciones de un evento ordenadas por numeroIntervencion DESC.
+ * Devuelve las intervenciones de un evento ordenadas por numeroIntervencion DESC.
  * Marca abierta=true si horaFinal es null.
+ *
+ * @param eventoId        ID del evento.
+ * @param soloAbiertas    Si true, restringe a las que tengan horaFinal null
+ *                        (las "en curso"/"pendientes"). El dashboard UCO lo
+ *                        usa para no traerse el histórico de cerradas.
  */
 export async function getIntervencionesByEvento(
-  eventoId: number
+  eventoId: number,
+  soloAbiertas = false,
 ): Promise<IntervencionListItem[]> {
   const intervenciones = await prisma.intervencion.findMany({
-    where: { eventoId },
+    where: {
+      eventoId,
+      ...(soloAbiertas ? { horaFinal: null } : {}),
+    },
     select: intervencionSelect,
     orderBy: { numeroIntervencion: 'desc' },
   });

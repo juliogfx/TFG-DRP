@@ -26,6 +26,7 @@ import type {
   GravedadIntervencion,
   SintomatologiaItem,
 } from '@/types/intervencion';
+import DateTimeInput from '@/app/components/DateTimeInput';
 
 type ModoTarjeta = 'amplio' | 'normal' | 'compacto' | 'mini' | 'micro';
 
@@ -57,6 +58,24 @@ const ESTADO_LABELS: Record<string, string> = {
   DISPONIBLE: 'Disponible',
   EN_INTERVENCION: 'En intervención',
   NO_OPERATIVA: 'No operativa',
+};
+
+const ESTADO_CLAVE: Record<string, string> = {
+  DISPONIBLE: 'CL0',
+  EN_INTERVENCION: 'CL2',
+  NO_OPERATIVA: 'CL3',
+};
+
+const PILL_STYLES: Record<string, string> = {
+  DISPONIBLE: 'bg-green-50 text-green-700',
+  EN_INTERVENCION: 'bg-red-50 text-red-700',
+  NO_OPERATIVA: 'bg-slate-100 text-slate-600',
+};
+
+const ESTADO_EVENTO_COLOR: Record<string, string> = {
+  PENDIENTE: 'text-amber-700 font-semibold',
+  ACTIVO: 'text-green-700 font-semibold',
+  FINALIZADO: 'text-slate-600 font-semibold',
 };
 
 const GRAVEDAD_STYLES: Record<string, string> = {
@@ -116,10 +135,12 @@ function TarjetaDotacion({
   dotacion,
   eventoId,
   modo,
+  intervencionActiva,
 }: {
   dotacion: DotacionEstado;
   eventoId: number;
   modo: ModoTarjeta;
+  intervencionActiva: { id: number; numeroIntervencion: number } | null;
 }) {
   const router = useRouter();
   const personalCubierto = dotacion.numeroPersonasAsignadas >= dotacion.personalMinimo;
@@ -131,23 +152,38 @@ function TarjetaDotacion({
     dotacion.personal[0] ??
     null;
 
-  function navegarActiva() {
-    router.push(`/uco/intervenciones?eventoId=${eventoId}&dotacionId=${dotacion.id}&filtro=activa`);
-  }
-
-  function navegarHistorialDirecto() {
+  // Click en el cuerpo: SIEMPRE intervenciones filtradas por esa dotación, sin
+  // filtro de estado. Para la intervención activa concreta se usa el enlace
+  // del pie con stopPropagation.
+  function navegarBody() {
     router.push(`/uco/intervenciones?eventoId=${eventoId}&dotacionId=${dotacion.id}`);
   }
+
+  function navegarPieActiva(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (intervencionActiva) {
+      router.push(`/uco/intervenciones?eventoId=${eventoId}&abrirIntervencion=${intervencionActiva.id}`);
+    } else {
+      router.push(`/uco/intervenciones?eventoId=${eventoId}&dotacionId=${dotacion.id}&filtro=activa`);
+    }
+  }
+
+  function navegarPieHistorial(e: React.MouseEvent) {
+    e.stopPropagation();
+    router.push(`/uco/intervenciones?eventoId=${eventoId}&dotacionId=${dotacion.id}`);
+  }
+
+  const pillClase = PILL_STYLES[dotacion.estado] ?? 'bg-slate-100 text-slate-600';
+  const pillTexto = `${ESTADO_CLAVE[dotacion.estado] ?? ''} ${ESTADO_LABELS[dotacion.estado] ?? dotacion.estado}`.trim();
+  const tituloHover = `${dotacion.codigo} — ${pillTexto}`;
 
   // MICRO — solo código + punto de color
   if (modo === 'micro') {
     return (
       <div
-        onClick={enIntervencion ? navegarActiva : navegarHistorialDirecto}
-        className={`rounded border ${CARD_STYLES[dotacion.estado]} p-2 flex items-center gap-1.5 cursor-pointer ${enIntervencion ? 'hover:ring-2 hover:ring-yellow-300' : 'hover:ring-2 hover:ring-slate-300'}`}
-        title={enIntervencion
-          ? `${dotacion.codigo} — Ver intervención activa`
-          : `${dotacion.codigo} — ${ESTADO_LABELS[dotacion.estado]} · Ver historial`}
+        onClick={navegarBody}
+        className={`rounded border ${CARD_STYLES[dotacion.estado]} p-2 flex items-center gap-1.5 cursor-pointer hover:ring-2 ${enIntervencion ? 'hover:ring-red-300' : 'hover:ring-slate-300'}`}
+        title={tituloHover}
       >
         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${DOT_STYLES[dotacion.estado]}`} />
         <span className="text-xs font-mono font-bold text-slate-900 truncate">{dotacion.codigo}</span>
@@ -155,15 +191,13 @@ function TarjetaDotacion({
     );
   }
 
-  // MINI — código + badge estado + icono cobertura
+  // MINI — código + pill estado + icono cobertura
   if (modo === 'mini') {
     return (
       <div
-        onClick={enIntervencion ? navegarActiva : navegarHistorialDirecto}
-        className={`rounded border ${CARD_STYLES[dotacion.estado]} p-2 cursor-pointer ${enIntervencion ? 'hover:ring-2 hover:ring-yellow-300' : 'hover:ring-2 hover:ring-slate-300'}`}
-        title={enIntervencion
-          ? `${dotacion.codigo} — Ver intervención activa`
-          : `${dotacion.codigo} — ${ESTADO_LABELS[dotacion.estado]} · Ver historial`}
+        onClick={navegarBody}
+        className={`rounded border ${CARD_STYLES[dotacion.estado]} p-2 cursor-pointer hover:ring-2 ${enIntervencion ? 'hover:ring-red-300' : 'hover:ring-slate-300'}`}
+        title={tituloHover}
       >
         <div className="flex items-center justify-between gap-1">
           <span className="text-xs font-mono font-bold text-slate-900 truncate">{dotacion.codigo}</span>
@@ -171,20 +205,20 @@ function TarjetaDotacion({
             {personalCubierto ? '✓' : '✗'}
           </span>
         </div>
-        <span className={`block mt-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full text-center ${BADGE_STYLES[dotacion.estado]}`}>
-          {ESTADO_LABELS[dotacion.estado]}
+        <span className={`block mt-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full text-center ${pillClase}`}>
+          {pillTexto}
         </span>
       </div>
     );
   }
 
-  // COMPACTO — código + tipo + badge + cobertura número
+  // COMPACTO — código + tipo + pill + cobertura número
   if (modo === 'compacto') {
     return (
       <div
-        onClick={enIntervencion ? navegarActiva : navegarHistorialDirecto}
-        className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-3 cursor-pointer ${enIntervencion ? 'hover:ring-2 hover:ring-yellow-300' : 'hover:ring-2 hover:ring-slate-300'}`}
-        title={enIntervencion ? 'Ver intervención activa' : 'Ver historial'}
+        onClick={navegarBody}
+        className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-3 cursor-pointer hover:ring-2 ${enIntervencion ? 'hover:ring-red-300' : 'hover:ring-slate-300'}`}
+        title={tituloHover}
       >
         <div className="flex items-center justify-between mb-1">
           <span className="text-sm font-mono font-bold text-slate-900">{dotacion.codigo}</span>
@@ -193,19 +227,19 @@ function TarjetaDotacion({
           </span>
         </div>
         <p className="text-xs text-slate-500 mb-1">{TIPO_LABELS[dotacion.tipo] ?? dotacion.tipo}</p>
-        <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full ${BADGE_STYLES[dotacion.estado]}`}>
-          {ESTADO_LABELS[dotacion.estado]}
+        <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full ${pillClase}`}>
+          {pillTexto}
         </span>
       </div>
     );
   }
 
-  // NORMAL — código, indicativo, tipo, badge, cobertura, personal máx 3
+  // NORMAL — código, indicativo, tipo, pill, cobertura, personal máx 3, footer
   if (modo === 'normal') {
     return (
       <div
-        onClick={enIntervencion ? navegarActiva : navegarHistorialDirecto}
-        className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-3 cursor-pointer ${enIntervencion ? 'hover:ring-2 hover:ring-yellow-300' : 'hover:ring-2 hover:ring-slate-300'}`}
+        onClick={navegarBody}
+        className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-3 cursor-pointer hover:ring-2 ${enIntervencion ? 'hover:ring-red-300' : 'hover:ring-slate-300'}`}
       >
         <div className="flex items-start justify-between mb-1">
           <div className="min-w-0 flex-1">
@@ -215,8 +249,8 @@ function TarjetaDotacion({
             )}
             <p className="text-xs text-slate-500 mt-0.5">{TIPO_LABELS[dotacion.tipo] ?? dotacion.tipo}</p>
           </div>
-          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${BADGE_STYLES[dotacion.estado]}`}>
-            {ESTADO_LABELS[dotacion.estado]}
+          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${pillClase}`}>
+            {pillTexto}
           </span>
         </div>
         <div className="flex items-center gap-2 text-xs mb-1">
@@ -241,10 +275,14 @@ function TarjetaDotacion({
             )}
           </div>
         )}
-        {enIntervencion ? (
-          <p className="text-xs text-yellow-700 mt-2 font-medium">Ver intervención activa →</p>
+        {enIntervencion && intervencionActiva ? (
+          <button onClick={navegarPieActiva} className="block w-full text-left text-xs text-red-700 mt-2 font-medium hover:underline">
+            Ver intervención activa (#{intervencionActiva.numeroIntervencion}) →
+          </button>
         ) : (
-          <p className="text-xs text-slate-400 mt-2">Ver historial →</p>
+          <button onClick={navegarPieHistorial} className="block w-full text-left text-xs text-slate-400 mt-2 hover:underline">
+            Ver historial →
+          </button>
         )}
       </div>
     );
@@ -253,8 +291,8 @@ function TarjetaDotacion({
   // AMPLIO — todo
   return (
     <div
-      onClick={enIntervencion ? navegarActiva : navegarHistorialDirecto}
-      className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-4 cursor-pointer ${enIntervencion ? 'hover:ring-2 hover:ring-yellow-300' : 'hover:ring-2 hover:ring-slate-300'}`}
+      onClick={navegarBody}
+      className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-4 cursor-pointer hover:ring-2 ${enIntervencion ? 'hover:ring-red-300' : 'hover:ring-slate-300'}`}
     >
       <div className="flex items-start justify-between mb-2">
         <div>
@@ -264,8 +302,8 @@ function TarjetaDotacion({
           )}
           <p className="text-xs text-slate-500 mt-0.5">{TIPO_LABELS[dotacion.tipo] ?? dotacion.tipo}</p>
         </div>
-        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${BADGE_STYLES[dotacion.estado]}`}>
-          {ESTADO_LABELS[dotacion.estado]}
+        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${pillClase}`}>
+          {pillTexto}
         </span>
       </div>
       <div className="flex items-center gap-2 mb-2">
@@ -297,13 +335,35 @@ function TarjetaDotacion({
       ) : (
         <p className="text-xs text-slate-400 italic mt-1">Sin personal asignado</p>
       )}
-      {enIntervencion ? (
-        <p className="text-xs text-yellow-700 mt-2 font-medium">Ver intervención activa →</p>
+      {enIntervencion && intervencionActiva ? (
+        <button onClick={navegarPieActiva} className="block w-full text-left text-xs text-red-700 mt-2 font-medium hover:underline">
+          Ver intervención activa (#{intervencionActiva.numeroIntervencion}) →
+        </button>
       ) : (
-        <p className="text-xs text-slate-400 mt-2">Ver historial →</p>
+        <button onClick={navegarPieHistorial} className="block w-full text-left text-xs text-slate-400 mt-2 hover:underline">
+          Ver historial →
+        </button>
       )}
     </div>
   );
+}
+
+const ESTADO_INTERV_STYLES: Record<string, string> = {
+  EN_CURSO:        'bg-blue-100 text-blue-700',
+  PENDIENTE_DOT:   'bg-orange-100 text-orange-700',
+  CERRADA:         'bg-slate-100 text-slate-600',
+};
+
+const ESTADO_INTERV_LABEL: Record<string, string> = {
+  EN_CURSO:      'EN CURSO',
+  PENDIENTE_DOT: 'PEND. DOT.',
+  CERRADA:       'CERRADA',
+};
+
+function deriveEstadoIntervencion(i: IntervencionListItem): 'EN_CURSO' | 'PENDIENTE_DOT' | 'CERRADA' {
+  if (i.horaFinal) return 'CERRADA';
+  if (i.horaLlegada) return 'EN_CURSO';
+  return 'PENDIENTE_DOT';
 }
 
 function TablaIntervenciones({
@@ -314,16 +374,19 @@ function TablaIntervenciones({
   onRowClick?: (i: IntervencionListItem) => void;
 }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200">
+    <div className="overflow-x-auto overflow-y-auto max-h-[400px] rounded-lg border border-slate-200">
       <table className="w-full table-fixed text-xs">
-        <thead className="bg-slate-50 border-b border-slate-200">
+        <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
           <tr>
-            <th className="w-[7%] text-left px-3 py-2 font-medium text-slate-600">Nº</th>
-            <th className="w-[12%] text-left px-3 py-2 font-medium text-slate-600">Dotación</th>
-            <th className="w-[26%] text-left px-3 py-2 font-medium text-slate-600">Sintomatología</th>
-            <th className="w-[13%] text-left px-3 py-2 font-medium text-slate-600">Gravedad</th>
-            <th className="w-[10%] text-left px-3 py-2 font-medium text-slate-600">Aviso</th>
-            <th className="w-[32%] text-left px-3 py-2 font-medium text-slate-600">Resolución</th>
+            <th className="w-[5%]  text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Nº</th>
+            <th className="w-[10%] text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Dotación</th>
+            <th className="w-[16%] text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Sintomatología</th>
+            <th className="w-[11%] text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Estado</th>
+            <th className="w-[10%] text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Gravedad</th>
+            <th className="w-[7%]  text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Aviso</th>
+            <th className="w-[7%]  text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Llegada</th>
+            <th className="w-[17%] text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Apoyo</th>
+            <th className="w-[17%] text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Resolución</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -333,6 +396,8 @@ function TablaIntervenciones({
               : i.trasladoHospital ? `Hospital${i.hospitalDestino ? ` · ${i.hospitalDestino}` : ''}`
               : '—';
             const sintomatologia = i.sintomatologia?.tipo ?? '—';
+            const estado = deriveEstadoIntervencion(i);
+            const apoyoCodigos = [i.dotacionApoyo?.codigo, i.dotacionTraslado?.codigo].filter(Boolean).join(', ') || '—';
             return (
               <tr
                 key={i.id}
@@ -340,11 +405,13 @@ function TablaIntervenciones({
                 className={`hover:bg-slate-50 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
               >
                 <td className="px-3 py-2 font-mono font-bold text-slate-900 truncate">#{i.numeroIntervencion}</td>
-                <td className="px-3 py-2 font-mono text-slate-700 truncate">
-                  {i.dotacionActiva.codigo}
-                  {i.dotacionApoyo && <span className="text-slate-400"> +{i.dotacionApoyo.codigo}</span>}
-                </td>
+                <td className="px-3 py-2 font-mono text-slate-700 truncate">{i.dotacionActiva.codigo}</td>
                 <td className="px-3 py-2 text-slate-600 truncate" title={sintomatologia}>{sintomatologia}</td>
+                <td className="px-3 py-2 truncate">
+                  <span className={`px-2 py-0.5 rounded-full font-medium text-[10px] ${ESTADO_INTERV_STYLES[estado]}`}>
+                    {ESTADO_INTERV_LABEL[estado]}
+                  </span>
+                </td>
                 <td className="px-3 py-2 truncate">
                   <span className={`px-2 py-0.5 rounded-full font-medium text-xs ${GRAVEDAD_STYLES[i.gravedad]}`}>
                     {i.gravedad}
@@ -355,12 +422,47 @@ function TablaIntervenciones({
                     ? new Date(i.horaAviso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
                     : '—'}
                 </td>
+                <td className="px-3 py-2 text-slate-500 font-mono truncate">
+                  {i.horaLlegada
+                    ? new Date(i.horaLlegada).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+                    : '—'}
+                </td>
+                <td className="px-3 py-2 font-mono text-slate-600 truncate" title={apoyoCodigos}>{apoyoCodigos}</td>
                 <td className="px-3 py-2 text-slate-500 truncate" title={resolucion}>{resolucion}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+interface CeldaContador {
+  etiqueta: string;
+  valor: number;
+  color: string;
+  onClick: () => void;
+}
+
+function BloqueContadores({ titulo, celdas }: { titulo: string; celdas: CeldaContador[] }) {
+  return (
+    <div className="rounded-[10px] border border-slate-200/60 bg-white">
+      <div className="text-[11px] uppercase tracking-wider text-slate-600 text-center py-1.5 border-b border-slate-200/60">
+        {titulo}
+      </div>
+      <div className="grid" style={{ gridTemplateColumns: `repeat(${celdas.length}, 1fr)` }}>
+        {celdas.map((c, i) => (
+          <button
+            key={c.etiqueta}
+            onClick={c.onClick}
+            className={`px-2 py-[10px] text-center transition hover:bg-slate-50 ${i > 0 ? 'border-l border-slate-200/60' : ''}`}
+          >
+            <p className={`text-[24px] font-semibold leading-tight ${c.color}`}>{c.valor}</p>
+            <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">{c.etiqueta}</p>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -412,7 +514,9 @@ function UCOContent() {
     try {
       const [resEstado, resInterv] = await Promise.all([
         fetch(`/api/uco/estado?eventoId=${eventoSeleccionado}`),
-        fetch(`/api/intervenciones?eventoId=${eventoSeleccionado}`),
+        // Dashboard solo opera con intervenciones activas (horaFinal null).
+        // Las cerradas las consulta el usuario en /uco/intervenciones.
+        fetch(`/api/intervenciones?eventoId=${eventoSeleccionado}&abierta=true`),
       ]);
       if (!resEstado.ok) { const json = await resEstado.json(); throw new Error(json.error ?? `Error ${resEstado.status}`); }
       const jsonEstado = await resEstado.json();
@@ -481,12 +585,17 @@ function UCOContent() {
     if (!eventoSeleccionado) return;
     setRegistrando(true);
     try {
+      // Al crear desde el dashboard UCO se asume que la dotación está in situ:
+      // se sella horaLlegada=now() para que el estado derivado salga EN_CURSO
+      // (no PEND. DOT.). La pantalla de gestión de intervenciones permite
+      // editarla después si la cronología real difiere.
       const body: CreateIntervencionInput = {
         eventoId: eventoSeleccionado,
         dotacionActivaId: Number(formIntervencion.dotacionActivaId),
         sintomatologiaId: Number(formIntervencion.sintomatologiaId),
         gravedad: formIntervencion.gravedad,
         horaAviso: formIntervencion.horaAviso || undefined,
+        horaLlegada: new Date().toISOString(),
         dotacionApoyoId: formIntervencion.dotacionApoyoId ? Number(formIntervencion.dotacionApoyoId) : undefined,
         altaEnLugar: formIntervencion.altaEnLugar,
         trasladoClinica: formIntervencion.trasladoClinica,
@@ -557,6 +666,9 @@ function UCOContent() {
   }
 
   const intervencionesAbiertas = intervenciones.filter((i) => i.abierta);
+  // Mapa dotacionId → intervención activa para mostrar #N en el footer de la tarjeta.
+  const intervencionActivaPorDotacion = new Map<number, IntervencionListItem>();
+  intervencionesAbiertas.forEach((i) => intervencionActivaPorDotacion.set(i.dotacionActiva.id, i));
 
   const eventosFiltrados = eventos.filter((ev) => {
     if (busquedaEvento && !ev.nombre.toLowerCase().includes(busquedaEvento.toLowerCase())) return false;
@@ -577,41 +689,23 @@ function UCOContent() {
     return `/uco/intervenciones?${params.toString()}`;
   }
 
+  function urlDotaciones(estadoDot?: string) {
+    const params = new URLSearchParams();
+    if (eventoSeleccionado) params.set('eventoId', String(eventoSeleccionado));
+    if (estadoDot) params.set('estadoDot', estadoDot);
+    return `/dotaciones?${params.toString()}`;
+  }
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-start justify-between mb-4">
+        <div>
           <h1 className="text-2xl font-semibold text-slate-900">Dashboard UCO</h1>
-          <span className="text-sm text-slate-400">Vista operativa en tiempo real</span>
-          <span className="text-sm text-slate-400">·</span>
-          <span className="text-sm text-slate-400">Refresco cada {POLLING_INTERVAL_MS / 1000}s</span>
+          <p className="text-sm text-slate-400 mt-0.5">
+            Vista operativa en tiempo real · Refresco cada {POLLING_INTERVAL_MS / 1000}s
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="relative flex h-2.5 w-2.5">
-            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${sinConexion ? 'bg-amber-400' : 'bg-green-400'}`} />
-            <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${sinConexion ? 'bg-amber-500' : 'bg-green-500'}`} />
-          </span>
-          {sinConexion ? (
-            <span className="text-xs text-amber-700 font-medium" title="El último refresco automático falló. Mostrando los últimos datos disponibles.">
-              ⚠ Sin conexión — datos no actualizados
-            </span>
-          ) : actualizando ? (
-            <span className="text-xs text-blue-600 font-medium animate-pulse">↻ Actualizando...</span>
-          ) : ultimaActualizacion ? (
-            <span className="text-xs text-slate-400">Actualizado a las {ultimaActualizacion}</span>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="mb-6">
-        <div className="flex items-center gap-2">
-          <div className="flex-1 text-sm text-slate-600 font-medium">
-            {eventoSeleccionado && eventos.find(e => e.id === eventoSeleccionado) ? (
-              <span>📅 {eventos.find(e => e.id === eventoSeleccionado)?.nombre}</span>
-            ) : (
-              <span className="text-slate-400">Ningún evento seleccionado</span>
-            )}
-          </div>
+        <div className="flex flex-col items-end gap-2">
           <button
             onClick={() => setFiltrosAbiertos(v => !v)}
             title={filtrosAbiertos ? 'Ocultar filtros' : 'Buscar evento'}
@@ -623,7 +717,28 @@ function UCOContent() {
           >
             🔍
           </button>
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${sinConexion ? 'bg-amber-400' : 'bg-green-400'}`} />
+              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${sinConexion ? 'bg-amber-500' : 'bg-green-500'}`} />
+            </span>
+            {sinConexion ? (
+              <span className="text-xs text-amber-700 font-medium" title="El último refresco automático falló. Mostrando los últimos datos disponibles.">
+                ⚠ Sin conexión — datos no actualizados
+              </span>
+            ) : actualizando ? (
+              <span className="text-xs text-blue-600 font-medium animate-pulse">↻ Actualizando...</span>
+            ) : ultimaActualizacion ? (
+              <span className="text-xs text-slate-400">Actualizado a las {ultimaActualizacion}</span>
+            ) : null}
+          </div>
         </div>
+      </div>
+
+      <div className="mb-6">
+        {!eventoSeleccionado && (
+          <p className="text-sm text-slate-400 mb-2">Ningún evento seleccionado</p>
+        )}
 
         {filtrosAbiertos && (
           <div className="mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
@@ -722,68 +837,40 @@ function UCOContent() {
 
       {!cargando && estadoUCO && (
         <>
-          <div className="flex items-center flex-wrap gap-3 mb-1">
-            <h2 className="text-xl font-semibold text-slate-900">{estadoUCO.nombreEvento}</h2>
-            <div className="flex items-center gap-2 bg-green-100 text-green-800 px-4 py-2 rounded-full">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-sm font-semibold">{estadoUCO.resumen.disponibles}</span>
-              <span className="text-sm">disponibles</span>
-            </div>
-            <div className="flex items-center gap-2 bg-yellow-100 text-yellow-800 px-4 py-2 rounded-full">
-              <span className="w-2 h-2 rounded-full bg-yellow-500" />
-              <span className="text-sm font-semibold">{estadoUCO.resumen.enIntervencion}</span>
-              <span className="text-sm">en intervención</span>
-            </div>
-            <div className="flex items-center gap-2 bg-red-100 text-red-800 px-4 py-2 rounded-full">
-              <span className="w-2 h-2 rounded-full bg-red-500" />
-              <span className="text-sm font-semibold">{estadoUCO.resumen.noOperativas}</span>
-              <span className="text-sm">no operativas</span>
-            </div>
-            <div className="flex items-center gap-2 bg-slate-100 text-slate-700 px-4 py-2 rounded-full">
-              <span className="text-sm font-semibold">{estadoUCO.resumen.total}</span>
-              <span className="text-sm">total dotaciones</span>
-            </div>
+          {/* Fila evento: nombre izq, fecha · recinto · estado a la derecha */}
+          <div className="flex items-center justify-between gap-3 mb-4 pb-2 border-b border-slate-200">
+            <span className="text-lg font-semibold text-slate-900 truncate">{estadoUCO.nombreEvento}</span>
+            <span className="text-sm text-slate-600 whitespace-nowrap">
+              📅 {new Date(estadoUCO.fechaEvento + 'T00:00:00').toLocaleDateString('es-ES', {
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+              })} · {estadoUCO.ubicacionEvento} ·{' '}
+              <span className={ESTADO_EVENTO_COLOR[estadoUCO.estadoEvento] ?? 'text-slate-600'}>
+                {estadoUCO.estadoEvento}
+              </span>
+            </span>
           </div>
-          <p className="text-sm text-slate-500 mb-4">
-            {new Date(estadoUCO.fechaEvento + 'T00:00:00').toLocaleDateString('es-ES', {
-              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-            })}
-          </p>
 
-          {/* Contadores clicables */}
-          <div className="grid grid-cols-4 gap-4 mb-6">
-            <button
-              onClick={() => router.push(urlIntervenciones())}
-              title="Ver intervenciones"
-              className="bg-white border border-slate-200 rounded-lg p-4 text-center cursor-pointer hover:ring-2 hover:ring-blue-300 transition"
-            >
-              <p className="text-3xl font-bold text-slate-900">{estadoUCO.contadores.totalIntervenciones}</p>
-              <p className="text-xs text-slate-500 mt-1">Intervenciones</p>
-            </button>
-            <button
-              onClick={() => router.push(urlIntervenciones('alta'))}
-              title="Ver intervenciones con alta en lugar"
-              className="bg-white border border-slate-200 rounded-lg p-4 text-center cursor-pointer hover:ring-2 hover:ring-blue-300 transition"
-            >
-              <p className="text-3xl font-bold text-blue-600">{estadoUCO.contadores.altasEnLugar}</p>
-              <p className="text-xs text-slate-500 mt-1">Altas en lugar</p>
-            </button>
-            <button
-              onClick={() => router.push(urlIntervenciones('clinica'))}
-              title="Ver traslados a clínica"
-              className="bg-white border border-slate-200 rounded-lg p-4 text-center cursor-pointer hover:ring-2 hover:ring-blue-300 transition"
-            >
-              <p className="text-3xl font-bold text-orange-600">{estadoUCO.contadores.trasladosClinica}</p>
-              <p className="text-xs text-slate-500 mt-1">Traslados clínica</p>
-            </button>
-            <button
-              onClick={() => router.push(urlIntervenciones('hospital'))}
-              title="Ver traslados a hospital"
-              className="bg-white border border-slate-200 rounded-lg p-4 text-center cursor-pointer hover:ring-2 hover:ring-blue-300 transition"
-            >
-              <p className="text-3xl font-bold text-red-600">{estadoUCO.contadores.trasladosHospital}</p>
-              <p className="text-xs text-slate-500 mt-1">Traslados hospital</p>
-            </button>
+          {/* Bloque dual de contadores (DOTACIONES 4fr · INTERVENCIONES 5fr para equilibrar visualmente) */}
+          <div className="mb-6 grid gap-4" style={{ gridTemplateColumns: '4fr 5fr' }}>
+            <BloqueContadores
+              titulo="DOTACIONES"
+              celdas={[
+                { etiqueta: 'Total',           valor: estadoUCO.resumen.total,         color: 'text-slate-800', onClick: () => router.push(urlDotaciones()) },
+                { etiqueta: 'CL0 Disponibles', valor: estadoUCO.resumen.disponibles,   color: 'text-green-700', onClick: () => router.push(urlDotaciones('DISPONIBLE')) },
+                { etiqueta: 'CL2 En interv.',  valor: estadoUCO.resumen.enIntervencion, color: 'text-red-700',   onClick: () => router.push(urlDotaciones('EN_INTERVENCION')) },
+                { etiqueta: 'CL3 No oper.',    valor: estadoUCO.resumen.noOperativas,   color: 'text-slate-500', onClick: () => router.push(urlDotaciones('NO_OPERATIVA')) },
+              ]}
+            />
+            <BloqueContadores
+              titulo="INTERVENCIONES"
+              celdas={[
+                { etiqueta: 'Total',           valor: estadoUCO.contadores.totalIntervenciones, color: 'text-slate-800',  onClick: () => router.push(urlIntervenciones()) },
+                { etiqueta: 'En curso',        valor: intervencionesAbiertas.length,            color: 'text-blue-700',   onClick: () => router.push(urlIntervenciones('activa')) },
+                { etiqueta: 'Altas en lugar',  valor: estadoUCO.contadores.altasEnLugar,        color: 'text-green-700',  onClick: () => router.push(urlIntervenciones('alta')) },
+                { etiqueta: 'Trasl. clínica',  valor: estadoUCO.contadores.trasladosClinica,    color: 'text-orange-700', onClick: () => router.push(urlIntervenciones('clinica')) },
+                { etiqueta: 'Trasl. hospital', valor: estadoUCO.contadores.trasladosHospital,   color: 'text-red-700',    onClick: () => router.push(urlIntervenciones('hospital')) },
+              ]}
+            />
           </div>
           <div className="mb-8">
             <div className="flex items-center justify-between mb-3">
@@ -833,24 +920,29 @@ function UCOContent() {
             )}
           </div>
 
-          <div className="mb-3 flex items-center">
-                <h2 className="text-lg font-semibold text-slate-800">Estado de dotaciones</h2>
-                <span className="text-xs text-slate-400 ml-2">
-                  ({numDotaciones} dotaciones · modo {modoTarjeta})
-                </span>
-              </div>
+          <div className="mb-3 flex items-center gap-3">
+            <div className="flex-1 border-t border-slate-300" />
+            <span className="text-xs font-medium uppercase tracking-wider text-slate-500 whitespace-nowrap">
+              Estado de dotaciones ({numDotaciones})
+            </span>
+            <div className="flex-1 border-t border-slate-300" />
+          </div>
               {estadoUCO.dotaciones.length === 0 ? (
                 <div className="text-center py-12 text-slate-400">No hay dotaciones activas para este evento.</div>
               ) : (
                 <div className={GRID_CLASSES[modoTarjeta]}>
-                  {estadoUCO.dotaciones.map((dotacion) => (
+                  {estadoUCO.dotaciones.map((dotacion) => {
+                    const i = intervencionActivaPorDotacion.get(dotacion.id);
+                    return (
                     <TarjetaDotacion
                       key={dotacion.id}
                       dotacion={dotacion}
                       eventoId={eventoSeleccionado!}
                       modo={modoTarjeta}
+                      intervencionActiva={i ? { id: i.id, numeroIntervencion: i.numeroIntervencion } : null}
                     />
-                  ))}
+                    );
+                  })}
                 </div>
               )}
         </>
@@ -1063,24 +1155,21 @@ function UCOContent() {
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Hora aviso</label>
-                  <input type="datetime-local" value={isoToDatetimeLocal(formEditar.horaAviso ?? null)}
-                    onChange={(e) => setFormEditar((p) => ({ ...p, horaAviso: e.target.value || null }))}
-                    className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Hora llegada</label>
-                  <input type="datetime-local" value={isoToDatetimeLocal(formEditar.horaLlegada ?? null)}
-                    onChange={(e) => setFormEditar((p) => ({ ...p, horaLlegada: e.target.value || null }))}
-                    className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Hora final</label>
-                  <input type="datetime-local" value={isoToDatetimeLocal(formEditar.horaFinal ?? null)}
-                    onChange={(e) => setFormEditar((p) => ({ ...p, horaFinal: e.target.value || null }))}
-                    className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs" />
-                </div>
+                <DateTimeInput
+                  label="Hora aviso"
+                  value={formEditar.horaAviso}
+                  onChange={(v) => setFormEditar((p) => ({ ...p, horaAviso: v }))}
+                />
+                <DateTimeInput
+                  label="Hora llegada"
+                  value={formEditar.horaLlegada}
+                  onChange={(v) => setFormEditar((p) => ({ ...p, horaLlegada: v }))}
+                />
+                <DateTimeInput
+                  label="Hora final"
+                  value={formEditar.horaFinal}
+                  onChange={(v) => setFormEditar((p) => ({ ...p, horaFinal: v }))}
+                />
               </div>
               <p className="text-xs text-slate-400 -mt-2">Al rellenar &quot;Hora final&quot;, la intervención pasa a estado cerrada.</p>
               <div>

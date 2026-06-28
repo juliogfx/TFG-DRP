@@ -12,6 +12,7 @@ import type {
 } from '@/types/intervencion';
 import type { DotacionListItem } from '@/types/dotacion';
 import type { EventoListItem } from '@/types/evento';
+import DateTimeInput from '@/app/components/DateTimeInput';
 
 const TIPO_LABELS: Record<string, string> = {
   AMBULANCIA: 'Ambulancia', BOTIQUIN: 'Botiquín', UVI: 'UVI Móvil',
@@ -62,6 +63,7 @@ function IntervencionesContent() {
   const eventoIdInicial = eventoIdParam ? Number(eventoIdParam) : null;
   const filtroParam = searchParams.get('filtro');
   const dotacionIdParam = searchParams.get('dotacionId');
+  const abrirIntervencionParam = searchParams.get('abrirIntervencion');
 
   const [eventos, setEventos] = useState<EventoListItem[]>([]);
   const [eventoId, setEventoId] = useState<number | null>(eventoIdInicial);
@@ -164,11 +166,18 @@ function IntervencionesContent() {
   }, [recargar]);
 
   useEffect(() => {
-    setFiltroDotacion('');
+    // No incluyo filtroDotacion porque viene del URL (?dotacionId=) y se
+    // gestiona en su propio useEffect debajo. El onChange del select de evento
+    // ya lo resetea explícitamente cuando el usuario cambia de evento.
     setFiltroEstado('TODAS');
     setFiltroGravedad('TODAS');
     setFiltroResolucion('TODAS');
   }, [eventoId]);
+
+  // Sync filtroDotacion con ?dotacionId= cada vez que cambia el URL.
+  useEffect(() => {
+    setFiltroDotacion(dotacionIdParam ? Number(dotacionIdParam) : '');
+  }, [dotacionIdParam]);
 
   useEffect(() => {
     if (filtroParam === 'alta' || filtroParam === 'clinica' || filtroParam === 'hospital') {
@@ -177,6 +186,33 @@ function IntervencionesContent() {
       setFiltroResolucion('TODAS');
     }
   }, [filtroParam]);
+
+  // Deep-link a una intervención concreta: cuando llega ?abrirIntervencion=N
+  // y la lista ya está cargada, abrimos el modal directamente en modo editar
+  // (lo que el dashboard espera cuando el UCO pincha "Ver intervención activa").
+  useEffect(() => {
+    if (!abrirIntervencionParam) return;
+    const objetivoId = Number(abrirIntervencionParam);
+    if (!Number.isFinite(objetivoId)) return;
+    const i = intervenciones.find((x) => x.id === objetivoId);
+    if (i) {
+      setFormEditar({
+        dotacionActivaId: i.dotacionActiva.id,
+        sintomatologiaId: i.sintomatologia?.id,
+        gravedad: i.gravedad,
+        horaAviso: i.horaAviso,
+        horaLlegada: i.horaLlegada,
+        horaFinal: i.horaFinal,
+        dotacionApoyoId: i.dotacionApoyo?.id ?? null,
+        altaEnLugar: i.altaEnLugar,
+        trasladoClinica: i.trasladoClinica,
+        trasladoHospital: i.trasladoHospital,
+        hospitalDestino: i.hospitalDestino,
+      });
+      setModalIntervencion({ intervencion: i, modo: 'editar' });
+      setErrorEditar(null);
+    }
+  }, [abrirIntervencionParam, intervenciones]);
 
   /** Resetea por completo todos los filtros y datos cargados. */
   function limpiarTodo() {
@@ -732,24 +768,21 @@ function IntervencionesContent() {
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Hora aviso</label>
-                    <input type="datetime-local" value={isoToDatetimeLocal(formEditar.horaAviso ?? null)}
-                      onChange={(e) => setFormEditar((p) => ({ ...p, horaAviso: e.target.value || null }))}
-                      className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Hora llegada</label>
-                    <input type="datetime-local" value={isoToDatetimeLocal(formEditar.horaLlegada ?? null)}
-                      onChange={(e) => setFormEditar((p) => ({ ...p, horaLlegada: e.target.value || null }))}
-                      className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Hora final</label>
-                    <input type="datetime-local" value={isoToDatetimeLocal(formEditar.horaFinal ?? null)}
-                      onChange={(e) => setFormEditar((p) => ({ ...p, horaFinal: e.target.value || null }))}
-                      className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs" />
-                  </div>
+                  <DateTimeInput
+                    label="Hora aviso"
+                    value={formEditar.horaAviso}
+                    onChange={(v) => setFormEditar((p) => ({ ...p, horaAviso: v }))}
+                  />
+                  <DateTimeInput
+                    label="Hora llegada"
+                    value={formEditar.horaLlegada}
+                    onChange={(v) => setFormEditar((p) => ({ ...p, horaLlegada: v }))}
+                  />
+                  <DateTimeInput
+                    label="Hora final"
+                    value={formEditar.horaFinal}
+                    onChange={(v) => setFormEditar((p) => ({ ...p, horaFinal: v }))}
+                  />
                 </div>
                 <p className="text-xs text-slate-400 -mt-2">Al rellenar &quot;Hora final&quot;, la intervención pasa a estado cerrada.</p>
                 <div>

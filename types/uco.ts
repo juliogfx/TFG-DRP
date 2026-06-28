@@ -41,6 +41,8 @@ export interface EstadoUCO {
   eventoId: number;
   nombreEvento: string;
   fechaEvento: string;
+  estadoEvento: 'PENDIENTE' | 'ACTIVO' | 'FINALIZADO';
+  ubicacionEvento: string;
   actualizadoEn: string;
   dotaciones: DotacionEstado[];
   contadores: ContadoresEvento;

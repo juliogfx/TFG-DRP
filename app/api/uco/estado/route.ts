@@ -55,6 +55,8 @@ export async function GET(
         id: true,
         nombre: true,
         fecha: true,
+        estado: true,
+        ubicacion: { select: { nombre: true } },
         dotaciones: {
           where: { deletedAt: null },
           select: {
@@ -119,6 +121,8 @@ export async function GET(
       eventoId: evento.id,
       nombreEvento: evento.nombre,
       fechaEvento: evento.fecha.toISOString().split('T')[0],
+      estadoEvento: evento.estado,
+      ubicacionEvento: evento.ubicacion.nombre,
       actualizadoEn: new Date().toISOString(),
       dotaciones,
       contadores,

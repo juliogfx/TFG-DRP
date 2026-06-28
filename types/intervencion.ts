@@ -15,6 +15,7 @@ export interface IntervencionListItem {
   sintomatologia: { id: number; tipo: string } | null;
   dotacionActiva: { id: number; codigo: string; tipo: string };
   dotacionApoyo: { id: number; codigo: string } | null;
+  dotacionTraslado: { id: number; codigo: string } | null;
   altaEnLugar: boolean;
   trasladoClinica: boolean;
   trasladoHospital: boolean;

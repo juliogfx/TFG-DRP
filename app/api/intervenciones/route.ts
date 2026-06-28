@@ -29,8 +29,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       { status: 400 }
     );
   }
+  // ?abierta=true → solo intervenciones con horaFinal null. Sin param,
+  // mantiene comportamiento histórico (todas).
+  const soloAbiertas = searchParams.get('abierta') === 'true';
   try {
-    const intervenciones = await getIntervencionesByEvento(eventoId);
+    const intervenciones = await getIntervencionesByEvento(eventoId, soloAbiertas);
     return NextResponse.json({ data: intervenciones }, { status: 200 });
   } catch (error) {
     console.error('[GET /api/intervenciones]', error);
