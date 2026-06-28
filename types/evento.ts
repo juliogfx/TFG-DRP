@@ -10,10 +10,13 @@
  * en lib/db/. Este fichero es importable desde cualquier capa (cliente o servidor).
  */
 
+export type EstadoEventoLiteral = 'PENDIENTE' | 'ACTIVO' | 'FINALIZADO';
+
 export interface EventoListItem {
   id: number;
   nombre: string;
   fecha: string;
+  estado: EstadoEventoLiteral;
   ubicacion: { id: number; nombre: string; codigo: string; };
   tipoEvento: { id: number; nombre: string; codigo: string; } | null;
   rival: string | null;

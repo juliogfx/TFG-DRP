@@ -124,6 +124,12 @@ function TarjetaDotacion({
   const router = useRouter();
   const personalCubierto = dotacion.numeroPersonasAsignadas >= dotacion.personalMinimo;
   const enIntervencion = dotacion.estado === 'EN_INTERVENCION';
+  // Responsable de la dotación: persona con rolEnDotacion que contenga
+  // "responsable"; si no hay tal rol formal aún, fallback al primer asignado.
+  const responsable =
+    dotacion.personal.find((p) => /responsable/i.test(p.rolEnDotacion)) ??
+    dotacion.personal[0] ??
+    null;
 
   function navegarActiva() {
     router.push(`/uco/intervenciones?eventoId=${eventoId}&dotacionId=${dotacion.id}&filtro=activa`);
@@ -221,8 +227,13 @@ function TarjetaDotacion({
         {dotacion.personal.length > 0 && (
           <div className="border-t border-slate-200 pt-1 mt-1 space-y-0.5">
             {dotacion.personal.slice(0, 3).map((p) => (
-              <div key={p.id} className="text-xs text-slate-700 truncate">
-                {p.nombreCompleto}
+              <div key={p.id}>
+                <div className="text-xs text-slate-700 truncate" title={p.nombreCompleto}>
+                  {p.nombreCompleto}
+                </div>
+                {p === responsable && p.telefono && (
+                  <div className="text-[10px] text-slate-400">📞 {p.telefono}</div>
+                )}
               </div>
             ))}
             {dotacion.personal.length > 3 && (
@@ -271,10 +282,15 @@ function TarjetaDotacion({
       {dotacion.personal.length > 0 ? (
         <div className="border-t border-slate-200 pt-2 mt-2 space-y-1">
           {dotacion.personal.map((p) => (
-            <div key={p.id} className="flex items-center gap-1.5">
-              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${p.tipo === 'FACULTATIVO' ? 'bg-purple-500' : 'bg-blue-500'}`} />
-              <span className="text-xs text-slate-700 truncate">{p.nombreCompleto}</span>
-              <span className="text-xs text-slate-400 truncate">· {p.rolEnDotacion}</span>
+            <div key={p.id}>
+              <div className="flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${p.tipo === 'FACULTATIVO' ? 'bg-purple-500' : 'bg-blue-500'}`} />
+                <span className="text-xs text-slate-700 truncate" title={p.nombreCompleto}>{p.nombreCompleto}</span>
+                <span className="text-xs text-slate-400 truncate">· {p.rolEnDotacion}</span>
+              </div>
+              {p === responsable && p.telefono && (
+                <div className="text-[10px] text-slate-400 ml-3">📞 {p.telefono}</div>
+              )}
             </div>
           ))}
         </div>
@@ -299,48 +315,50 @@ function TablaIntervenciones({
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200">
-      <table className="w-full text-xs">
+      <table className="w-full table-fixed text-xs">
         <thead className="bg-slate-50 border-b border-slate-200">
           <tr>
-            <th className="text-left px-3 py-2 font-medium text-slate-600">Nº</th>
-            <th className="text-left px-3 py-2 font-medium text-slate-600">Dotación</th>
-            <th className="text-left px-3 py-2 font-medium text-slate-600">Sintomatología</th>
-            <th className="text-left px-3 py-2 font-medium text-slate-600">Gravedad</th>
-            <th className="text-left px-3 py-2 font-medium text-slate-600">Aviso</th>
-            <th className="text-left px-3 py-2 font-medium text-slate-600">Resolución</th>
+            <th className="w-[7%] text-left px-3 py-2 font-medium text-slate-600">Nº</th>
+            <th className="w-[12%] text-left px-3 py-2 font-medium text-slate-600">Dotación</th>
+            <th className="w-[26%] text-left px-3 py-2 font-medium text-slate-600">Sintomatología</th>
+            <th className="w-[13%] text-left px-3 py-2 font-medium text-slate-600">Gravedad</th>
+            <th className="w-[10%] text-left px-3 py-2 font-medium text-slate-600">Aviso</th>
+            <th className="w-[32%] text-left px-3 py-2 font-medium text-slate-600">Resolución</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {intervenciones.map((i) => (
-            <tr
-              key={i.id}
-              onClick={() => onRowClick?.(i)}
-              className={`hover:bg-slate-50 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
-            >
-              <td className="px-3 py-2 font-mono font-bold text-slate-900">#{i.numeroIntervencion}</td>
-              <td className="px-3 py-2 font-mono text-slate-700">
-                {i.dotacionActiva.codigo}
-                {i.dotacionApoyo && <span className="text-slate-400"> +{i.dotacionApoyo.codigo}</span>}
-              </td>
-              <td className="px-3 py-2 text-slate-600">{i.sintomatologia?.tipo ?? '—'}</td>
-              <td className="px-3 py-2">
-                <span className={`px-2 py-0.5 rounded-full font-medium text-xs ${GRAVEDAD_STYLES[i.gravedad]}`}>
-                  {i.gravedad}
-                </span>
-              </td>
-              <td className="px-3 py-2 text-slate-500 font-mono">
-                {i.horaAviso
-                  ? new Date(i.horaAviso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
-                  : '—'}
-              </td>
-              <td className="px-3 py-2 text-slate-500">
-                {i.altaEnLugar ? 'Alta en lugar'
-                  : i.trasladoClinica ? 'Clínica'
-                  : i.trasladoHospital ? `Hospital${i.hospitalDestino ? ` · ${i.hospitalDestino}` : ''}`
-                  : '—'}
-              </td>
-            </tr>
-          ))}
+          {intervenciones.map((i) => {
+            const resolucion = i.altaEnLugar ? 'Alta en lugar'
+              : i.trasladoClinica ? 'Clínica'
+              : i.trasladoHospital ? `Hospital${i.hospitalDestino ? ` · ${i.hospitalDestino}` : ''}`
+              : '—';
+            const sintomatologia = i.sintomatologia?.tipo ?? '—';
+            return (
+              <tr
+                key={i.id}
+                onClick={() => onRowClick?.(i)}
+                className={`hover:bg-slate-50 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
+              >
+                <td className="px-3 py-2 font-mono font-bold text-slate-900 truncate">#{i.numeroIntervencion}</td>
+                <td className="px-3 py-2 font-mono text-slate-700 truncate">
+                  {i.dotacionActiva.codigo}
+                  {i.dotacionApoyo && <span className="text-slate-400"> +{i.dotacionApoyo.codigo}</span>}
+                </td>
+                <td className="px-3 py-2 text-slate-600 truncate" title={sintomatologia}>{sintomatologia}</td>
+                <td className="px-3 py-2 truncate">
+                  <span className={`px-2 py-0.5 rounded-full font-medium text-xs ${GRAVEDAD_STYLES[i.gravedad]}`}>
+                    {i.gravedad}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-slate-500 font-mono truncate">
+                  {i.horaAviso
+                    ? new Date(i.horaAviso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+                    : '—'}
+                </td>
+                <td className="px-3 py-2 text-slate-500 truncate" title={resolucion}>{resolucion}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -371,17 +389,26 @@ function UCOContent() {
   const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
   const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
   const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
+  // Filtro por estado de evento (afecta a /api/eventos). Default ACTIVO.
+  const [filtroEstadoEvento, setFiltroEstadoEvento] = useState<'TODOS' | 'PENDIENTE' | 'ACTIVO' | 'FINALIZADO'>('ACTIVO');
 
   const [modalEditar, setModalEditar] = useState<IntervencionListItem | null>(null);
   const [formEditar, setFormEditar] = useState<UpdateIntervencionInput>({});
   const [guardando, setGuardando] = useState(false);
   const [errorEditar, setErrorEditar] = useState<string | null>(null);
+  // Indicador discreto: el polling acaba de fallar. Se borra en cuanto un refresco
+  // vuelve a tener éxito. No reemplaza al error de carga inicial — el polling NO
+  // debe pintar el banner rojo, solo loguear y marcar este flag.
+  const [sinConexion, setSinConexion] = useState(false);
 
   const fetchEstado = useCallback(async (esPolling = false) => {
     if (!eventoSeleccionado) return;
-    if (esPolling) setActualizando(true);
-    else setCargando(true);
-    setError(null);
+    if (esPolling) {
+      setActualizando(true);
+    } else {
+      setCargando(true);
+      setError(null);
+    }
     try {
       const [resEstado, resInterv] = await Promise.all([
         fetch(`/api/uco/estado?eventoId=${eventoSeleccionado}`),
@@ -392,8 +419,18 @@ function UCOContent() {
       const jsonInterv = await resInterv.json();
       setEstadoUCO(jsonEstado.data);
       setIntervenciones(jsonInterv.data ?? []);
+      setSinConexion(false);
+      setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al cargar el estado');
+      if (esPolling) {
+        // Polling fallido: mantener datos en pantalla, no pintar banner rojo.
+        // Solo log + flag para indicador discreto.
+        console.warn('[UCO polling] refresco automático falló:', e);
+        setSinConexion(true);
+      } else {
+        setError(e instanceof Error ? e.message : 'Error al cargar el estado');
+        setSinConexion(true);
+      }
     } finally {
       setCargando(false);
       setActualizando(false);
@@ -401,24 +438,34 @@ function UCOContent() {
   }, [eventoSeleccionado]);
 
   useEffect(() => {
-    async function cargarInicial() {
+    async function cargarSintomatologias() {
       try {
-        const [resEventos, resSint] = await Promise.all([
-          fetch('/api/eventos'),
-          fetch('/api/sintomatologias'),
-        ]);
+        const resSint = await fetch('/api/sintomatologias');
+        const jsonSint = await resSint.json();
+        setSintomatologias(jsonSint.data ?? []);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Error al cargar sintomatologías');
+      }
+    }
+    cargarSintomatologias();
+  }, []);
+
+  useEffect(() => {
+    async function cargarEventos() {
+      try {
+        const url = filtroEstadoEvento === 'TODOS'
+          ? '/api/eventos'
+          : `/api/eventos?estado=${filtroEstadoEvento}`;
+        const resEventos = await fetch(url);
         if (!resEventos.ok) throw new Error(`Error ${resEventos.status}`);
         const jsonEventos = await resEventos.json();
-        const jsonSint = await resSint.json();
         setEventos(jsonEventos.data);
-        setSintomatologias(jsonSint.data ?? []);
-
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Error al cargar eventos');
       }
     }
-    cargarInicial();
-  }, []);
+    cargarEventos();
+  }, [filtroEstadoEvento]);
 
   useEffect(() => {
     if (!eventoSeleccionado) return;
@@ -541,10 +588,14 @@ function UCOContent() {
         </div>
         <div className="flex items-center gap-2">
           <span className="relative flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${sinConexion ? 'bg-amber-400' : 'bg-green-400'}`} />
+            <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${sinConexion ? 'bg-amber-500' : 'bg-green-500'}`} />
           </span>
-          {actualizando ? (
+          {sinConexion ? (
+            <span className="text-xs text-amber-700 font-medium" title="El último refresco automático falló. Mostrando los últimos datos disponibles.">
+              ⚠ Sin conexión — datos no actualizados
+            </span>
+          ) : actualizando ? (
             <span className="text-xs text-blue-600 font-medium animate-pulse">↻ Actualizando...</span>
           ) : ultimaActualizacion ? (
             <span className="text-xs text-slate-400">Actualizado a las {ultimaActualizacion}</span>
@@ -576,7 +627,20 @@ function UCOContent() {
 
         {filtrosAbiertos && (
           <div className="mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
-            <div className="flex gap-2">
+            <div className="flex items-end gap-4">
+              <div className="w-[150px]">
+                <label className="block text-xs font-medium text-slate-600 mb-1">Estado evento</label>
+                <select
+                  value={filtroEstadoEvento}
+                  onChange={(e) => setFiltroEstadoEvento(e.target.value as typeof filtroEstadoEvento)}
+                  className="w-full border border-slate-300 rounded-md px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="TODOS">Todos</option>
+                  <option value="PENDIENTE">Pendiente</option>
+                  <option value="ACTIVO">Activo</option>
+                  <option value="FINALIZADO">Finalizado</option>
+                </select>
+              </div>
               <input
                 type="text"
                 value={busquedaEvento}
@@ -596,7 +660,7 @@ function UCOContent() {
                   }
                   if (nuevoEvento) setFiltrosAbiertos(false);
                 }}
-                className="flex-1 max-w-xs border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-[250px] border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Selecciona un evento...</option>
                 {eventosFiltrados.map((ev) => (
@@ -630,6 +694,7 @@ function UCOContent() {
                   setBusquedaEvento('');
                   setFiltroFechaDesde('');
                   setFiltroFechaHasta('');
+                  setFiltroEstadoEvento('ACTIVO');
                   setEventoSeleccionado(null);
                   setEstadoUCO(null);
                   setIntervenciones([]);
@@ -684,10 +749,6 @@ function UCOContent() {
               weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
             })}
           </p>
-
-          <div className="flex gap-6 items-start">
-            {/* LEFT column — counters + intervenciones en curso */}
-            <div className="w-2/5 flex-shrink-0">
 
           {/* Contadores clicables */}
           <div className="grid grid-cols-4 gap-4 mb-6">
@@ -772,11 +833,7 @@ function UCOContent() {
             )}
           </div>
 
-            </div>
-
-            {/* RIGHT column — dotaciones grid */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center mb-3">
+          <div className="mb-3 flex items-center">
                 <h2 className="text-lg font-semibold text-slate-800">Estado de dotaciones</h2>
                 <span className="text-xs text-slate-400 ml-2">
                   ({numDotaciones} dotaciones · modo {modoTarjeta})
@@ -796,8 +853,6 @@ function UCOContent() {
                   ))}
                 </div>
               )}
-            </div>
-          </div>
         </>
       )}
 

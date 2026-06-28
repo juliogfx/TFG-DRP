@@ -8,19 +8,30 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { EstadoEvento } from '@prisma/client';
 import { getEventos, createEvento } from '@/lib/db/eventos';
 import type { ApiResponse, ApiError, EventoListItem, EventoDetalle, CreateEventoInput } from '@/types/evento';
 
+const ESTADOS_VALIDOS = new Set<string>(Object.values(EstadoEvento));
+
 /**
  * GET /api/eventos
- * Devuelve la lista de todos los eventos activos ordenados por fecha descendente.
+ * Devuelve la lista de eventos activos ordenados por fecha descendente.
+ *
+ * Query params:
+ *   ?estado=PENDIENTE|ACTIVO|FINALIZADO  Filtra por estado. Si se omite o
+ *   el valor no es válido, devuelve todos los estados.
  *
  * @returns 200 + ApiResponse<EventoListItem[]>
  * @returns 500 + ApiError si falla la consulta a BD
  */
-export async function GET(): Promise<NextResponse<ApiResponse<EventoListItem[]> | ApiError>> {
+export async function GET(request: NextRequest): Promise<NextResponse<ApiResponse<EventoListItem[]> | ApiError>> {
   try {
-    const eventos = await getEventos();
+    const estadoParam = new URL(request.url).searchParams.get('estado');
+    const estado = estadoParam && ESTADOS_VALIDOS.has(estadoParam)
+      ? (estadoParam as EstadoEvento)
+      : undefined;
+    const eventos = await getEventos(estado);
     return NextResponse.json({ data: eventos }, { status: 200 });
   } catch (error) {
     console.error('[GET /api/eventos]', error);

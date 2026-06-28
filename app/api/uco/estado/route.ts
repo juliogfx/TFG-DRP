@@ -68,7 +68,7 @@ export async function GET(
             personal: {
               select: {
                 rolEnDotacion: true,
-                persona: { select: { id: true, nombreCompleto: true, tipo: true } },
+                persona: { select: { id: true, nombreCompleto: true, tipo: true, telefono: true } },
               },
             },
           },
@@ -102,6 +102,7 @@ export async function GET(
         nombreCompleto: a.persona.nombreCompleto,
         rolEnDotacion: a.rolEnDotacion,
         tipo: a.persona.tipo as 'VOLUNTARIO' | 'FACULTATIVO',
+        telefono: a.persona.telefono,
       })),
     }));
 

@@ -14,7 +14,7 @@
  */
 
 import 'dotenv/config';
-import { PrismaClient, TipoEmpresa, RolUsuario, TipoPersona, TipoDotacion, EstadoDotacion } from '@prisma/client';
+import { PrismaClient, TipoEmpresa, RolUsuario, TipoPersona, TipoDotacion, EstadoDotacion, EstadoEvento } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import bcrypt from 'bcryptjs';
 
@@ -216,12 +216,37 @@ async function main() {
   ]);
   console.log('✓ Puestos creados');
 
+  await prisma.sintomatologia.deleteMany({
+    where: {
+      tipo: {
+        in: [
+          'Traumatismo',
+          'Pérdida de conocimiento',
+          'Dolor torácico',
+          'Intoxicación etílica',
+          'Crisis epiléptica',
+        ],
+      },
+    },
+  });
+
   const sintomatologias = [
-    { tipo: 'Traumatismo', descripcion: 'Lesión física por golpe, caída o impacto' },
-    { tipo: 'Pérdida de conocimiento', descripcion: 'Síncope o lipotimia' },
-    { tipo: 'Dolor torácico', descripcion: 'Dolor en zona pectoral, posible origen cardíaco' },
-    { tipo: 'Intoxicación etílica', descripcion: 'Ingesta excesiva de alcohol' },
-    { tipo: 'Crisis epiléptica', descripcion: 'Episodio convulsivo de origen neurológico' },
+    { tipo: 'HERIDAS',                descripcion: 'Heridas y hemorragias' },
+    { tipo: 'TRAUMATISMOS',           descripcion: 'Traumatismos y fracturas' },
+    { tipo: 'INTOXICACIONES',         descripcion: 'Intoxicaciones y envenenamientos' },
+    { tipo: 'PATOLOGIA CARDIACA',     descripcion: 'Patología cardíaca' },
+    { tipo: 'PATOLOGIA RESPIRATORIA', descripcion: 'Patología respiratoria' },
+    { tipo: 'PATOLOGIA DIGESTIVA',    descripcion: 'Patología digestiva' },
+    { tipo: 'PERDIDA DE CONSCIENCIA', descripcion: 'Pérdida de consciencia o síncope' },
+    { tipo: 'QUEMADURAS',             descripcion: 'Quemaduras térmicas o químicas' },
+    { tipo: 'MALESTAR GENERAL',       descripcion: 'Malestar general inespecífico' },
+    { tipo: 'CEFALEAS',               descripcion: 'Cefaleas y migrañas' },
+    { tipo: 'FIEBRE',                 descripcion: 'Fiebre y procesos febriles' },
+    { tipo: 'GRIPE',                  descripcion: 'Síndrome gripal' },
+    { tipo: 'MAREOS',                 descripcion: 'Mareos y vértigos' },
+    { tipo: 'VARIOS',                 descripcion: 'Varios / Sin clasificar' },
+    { tipo: 'OTROS',                  descripcion: 'Otros procesos' },
+    { tipo: 'SIMULACRO',              descripcion: 'Intervención de simulacro' },
   ];
 
   for (const s of sintomatologias) {
@@ -415,25 +440,27 @@ async function main() {
 
   const evento1 = await prisma.evento.upsert({
     where: { id: 1 },
-    update: {},
+    update: { estado: EstadoEvento.ACTIVO },
     create: {
       ...eventoBase,
       nombre: 'Real Madrid vs FC Barcelona',
       fecha: new Date('2026-05-17'),
       tipoEventoId: tipoLiga.id,
       rival: 'FC Barcelona',
+      estado: EstadoEvento.ACTIVO,
     },
   });
 
   const evento2 = await prisma.evento.upsert({
     where: { id: 2 },
-    update: {},
+    update: { estado: EstadoEvento.ACTIVO },
     create: {
       ...eventoBase,
       nombre: 'Real Madrid vs Atlético de Madrid',
       fecha: new Date('2026-05-24'),
       tipoEventoId: tipoCha.id,
       rival: 'Atlético de Madrid',
+      estado: EstadoEvento.ACTIVO,
     },
   });
   console.log('✓ Eventos creados');

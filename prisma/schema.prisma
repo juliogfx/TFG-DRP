@@ -89,6 +89,12 @@ enum TipoAlerta {
   MATERIAL_DANADO
 }
 
+enum EstadoEvento {
+  PENDIENTE
+  ACTIVO
+  FINALIZADO
+}
+
 enum TipoDotacion {
   AMBULANCIA
   BOTIQUIN
@@ -336,6 +342,7 @@ model Evento {
   temperaturaClin       Decimal?  @map("temperatura_clinica") @db.Decimal(4, 1)
   observaciones         String?   @db.Text
   deletedAt             DateTime? @map("deleted_at")
+  estado                EstadoEvento @default(PENDIENTE)
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 

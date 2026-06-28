@@ -26,6 +26,7 @@ export interface DotacionEstado {
     nombreCompleto: string;
     rolEnDotacion: string;
     tipo: 'VOLUNTARIO' | 'FACULTATIVO';
+    telefono: string | null;
   }[];
 }
 

@@ -13,6 +13,7 @@
  */
 
 import { prisma } from '@/lib/db/prisma';
+import type { EstadoEvento } from '@prisma/client';
 import type { EventoListItem, EventoDetalle, CreateEventoInput, UpdateEventoInput } from '@/types/evento';
 
 const ubicacionSelect = { id: true, nombre: true, codigo: true } as const;
@@ -22,19 +23,24 @@ const empresaSelect = { id: true, nombre: true, codigo: true } as const;
 const equipoSelect = { id: true, nombre: true, codigo: true, deporte: true } as const;
 
 /**
- * Obtiene la lista de todos los eventos activos (no eliminados).
+ * Obtiene la lista de eventos activos (no eliminados).
  * Incluye ubicación, tipo de evento y conteo de dotaciones activas.
  * Ordenados por fecha descendente (más reciente primero).
  *
+ * @param estado - Si se indica, filtra por ese estado (PENDIENTE | ACTIVO | FINALIZADO).
  * @returns Array de EventoListItem listos para serializar como JSON.
  */
-export async function getEventos(): Promise<EventoListItem[]> {
+export async function getEventos(estado?: EstadoEvento): Promise<EventoListItem[]> {
   const eventos = await prisma.evento.findMany({
-    where: { deletedAt: null },
+    where: {
+      deletedAt: null,
+      ...(estado ? { estado } : {}),
+    },
     select: {
       id: true,
       nombre: true,
       fecha: true,
+      estado: true,
       rival: true,
       aforoPrevisto: true,
       temporada: true,

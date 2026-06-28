@@ -29,10 +29,19 @@ const globalForPrisma = globalThis as GlobalWithPrisma;
  * Construye un PrismaClient nuevo usando el adapter de node-postgres.
  * Se prefiere `DATABASE_URL` (pooler) en runtime; `DIRECT_URL` queda
  * reservado para migraciones y scripts one-shot (seed, jobs).
+ *
+ * Límite de pool: el plan gratuito de Supabase tope ~15 conexiones
+ * concurrentes en el pooler. `max: 3` evita que esta app sola sature
+ * el cupo cuando HMR + polling + clicks generan ráfagas paralelas.
+ * `connection_limit` / `pool_timeout` del DSN NO los lee `pg.Pool`;
+ * la configuración tiene que ir aquí. Si subes a un plan mayor o
+ * despliegas con muchas instancias, recalibra `max`.
  */
 function createPrismaClient(): PrismaClient {
   const adapter = new PrismaPg({
     connectionString: process.env.DATABASE_URL ?? process.env.DIRECT_URL,
+    max: 3,
+    idleTimeoutMillis: 20_000,
   });
   return new PrismaClient({ adapter });
 }

@@ -10,23 +10,38 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { EventoListItem } from '@/types/evento';
 
 interface UbicacionItem { id: number; codigo: string; nombre: string; }
 interface TipoEventoItem { id: number; codigo: string; nombre: string; }
 
-function useEventos() {
+const ESTADO_EVENTO_BADGE: Record<string, string> = {
+  PENDIENTE:  'bg-yellow-100 text-yellow-800',
+  ACTIVO:     'bg-green-100 text-green-800',
+  FINALIZADO: 'bg-gray-100 text-gray-600',
+};
+
+const ESTADO_EVENTO_LABEL: Record<string, string> = {
+  PENDIENTE:  'Pendiente',
+  ACTIVO:     'Activo',
+  FINALIZADO: 'Finalizado',
+};
+
+type FiltroEstadoEvento = 'TODOS' | 'PENDIENTE' | 'ACTIVO' | 'FINALIZADO';
+
+function useEventos(estado: FiltroEstadoEvento) {
   const [eventos, setEventos] = useState<EventoListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function cargar() {
+  const cargar = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/eventos');
+      const url = estado === 'TODOS' ? '/api/eventos' : `/api/eventos?estado=${estado}`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const json = await res.json();
       setEventos(json.data);
@@ -35,17 +50,19 @@ function useEventos() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [estado]);
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => { cargar(); }, [cargar]);
 
   return { eventos, loading, error, recargar: cargar };
 }
 
 export default function EventosPage() {
   const router = useRouter();
-  const { eventos, loading, error, recargar } = useEventos();
+  const [filtroEstadoEvento, setFiltroEstadoEvento] = useState<FiltroEstadoEvento>('ACTIVO');
+  const { eventos, loading, error, recargar } = useEventos(filtroEstadoEvento);
   const [eliminando, setEliminando] = useState<number | null>(null);
+  const [historialAbierto, setHistorialAbierto] = useState(false);
 
   // Catálogos para filtros
   const [ubicaciones, setUbicaciones] = useState<UbicacionItem[]>([]);
@@ -99,6 +116,7 @@ export default function EventosPage() {
     setFiltroTipo('');
     setFiltroFechaDesde('');
     setFiltroFechaHasta('');
+    setFiltroEstadoEvento('ACTIVO');
   }
 
   const eventosFiltrados = eventos.filter((ev) => {
@@ -110,7 +128,75 @@ export default function EventosPage() {
     return true;
   });
 
-  const hayFiltrosActivos = busqueda || filtroUbicacion || filtroTipo || filtroFechaDesde || filtroFechaHasta;
+  const eventosPrincipal = eventosFiltrados.filter((e) => e.estado !== 'FINALIZADO');
+  const eventosHistorial = eventosFiltrados.filter((e) => e.estado === 'FINALIZADO');
+
+  const hayFiltrosActivos = busqueda || filtroUbicacion || filtroTipo || filtroFechaDesde || filtroFechaHasta
+    || filtroEstadoEvento !== 'ACTIVO';
+
+  function renderTabla(lista: EventoListItem[]) {
+    return (
+      <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th className="text-left px-4 py-3 font-medium text-slate-600">Nombre</th>
+              <th className="text-left px-4 py-3 font-medium text-slate-600">Fecha</th>
+              <th className="text-left px-4 py-3 font-medium text-slate-600">Estado</th>
+              <th className="text-left px-4 py-3 font-medium text-slate-600">Ubicación</th>
+              <th className="text-left px-4 py-3 font-medium text-slate-600">Tipo</th>
+              <th className="text-center px-4 py-3 font-medium text-slate-600">Dotaciones</th>
+              <th className="text-right px-4 py-3 font-medium text-slate-600">Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {lista.map((evento) => (
+              <tr key={evento.id} className="hover:bg-slate-50 transition-colors">
+                <td className="px-4 py-3 font-medium text-slate-900">{evento.nombre}</td>
+                <td className="px-4 py-3 text-slate-600">
+                  {new Date(evento.fecha + 'T00:00:00').toLocaleDateString('es-ES')}
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ESTADO_EVENTO_BADGE[evento.estado] ?? 'bg-slate-100 text-slate-600'}`}>
+                    {ESTADO_EVENTO_LABEL[evento.estado] ?? evento.estado}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-slate-600">
+                  <span className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded mr-1">
+                    {evento.ubicacion.codigo}
+                  </span>
+                  {evento.ubicacion.nombre}
+                </td>
+                <td className="px-4 py-3 text-slate-600">
+                  {evento.tipoEvento?.nombre ?? <span className="text-slate-400">—</span>}
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold">
+                    {evento.numeroDotaciones}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right space-x-2">
+                  <button
+                    onClick={() => router.push(`/eventos/${evento.id}/editar`)}
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => handleEliminar(evento.id, evento.nombre)}
+                    disabled={eliminando === evento.id}
+                    className="text-red-500 hover:text-red-700 text-sm font-medium disabled:opacity-50"
+                  >
+                    {eliminando === evento.id ? 'Eliminando…' : 'Eliminar'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -129,7 +215,20 @@ export default function EventosPage() {
 
       {/* Barra de filtros */}
       <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
-        <div className="flex gap-2">
+        <div className="flex items-end gap-4">
+          <div className="w-[150px]">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Estado evento</label>
+            <select
+              value={filtroEstadoEvento}
+              onChange={(e) => setFiltroEstadoEvento(e.target.value as FiltroEstadoEvento)}
+              className="w-full border border-slate-300 rounded-md px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="TODOS">Todos</option>
+              <option value="PENDIENTE">Pendiente</option>
+              <option value="ACTIVO">Activo</option>
+              <option value="FINALIZADO">Finalizado</option>
+            </select>
+          </div>
           <input
             type="text"
             value={busqueda}
@@ -145,7 +244,7 @@ export default function EventosPage() {
                 if (ev) setBusqueda(ev.nombre);
               }
             }}
-            className="border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-xs"
+            className="w-[250px] border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Ir a evento...</option>
             {eventos.map((ev) => (
@@ -155,7 +254,7 @@ export default function EventosPage() {
             ))}
           </select>
         </div>
-        <div className="flex flex-wrap gap-2 items-end">
+        <div className="flex flex-wrap gap-4 items-end">
           <div className="flex-1 min-w-40">
             <label className="block text-xs font-medium text-slate-600 mb-1">Ubicación</label>
             <select
@@ -235,59 +334,32 @@ export default function EventosPage() {
               Ningún evento coincide con los filtros aplicados.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-medium text-slate-600">Nombre</th>
-                    <th className="text-left px-4 py-3 font-medium text-slate-600">Fecha</th>
-                    <th className="text-left px-4 py-3 font-medium text-slate-600">Ubicación</th>
-                    <th className="text-left px-4 py-3 font-medium text-slate-600">Tipo</th>
-                    <th className="text-center px-4 py-3 font-medium text-slate-600">Dotaciones</th>
-                    <th className="text-right px-4 py-3 font-medium text-slate-600">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {eventosFiltrados.map((evento) => (
-                    <tr key={evento.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-slate-900">{evento.nombre}</td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {new Date(evento.fecha + 'T00:00:00').toLocaleDateString('es-ES')}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        <span className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded mr-1">
-                          {evento.ubicacion.codigo}
-                        </span>
-                        {evento.ubicacion.nombre}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {evento.tipoEvento?.nombre ?? <span className="text-slate-400">—</span>}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold">
-                          {evento.numeroDotaciones}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right space-x-2">
-                        <button
-                          onClick={() => router.push(`/eventos/${evento.id}/editar`)}
-                          className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => handleEliminar(evento.id, evento.nombre)}
-                          disabled={eliminando === evento.id}
-                          className="text-red-500 hover:text-red-700 text-sm font-medium disabled:opacity-50"
-                        >
-                          {eliminando === evento.id ? 'Eliminando…' : 'Eliminar'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <>
+              {eventosPrincipal.length === 0 ? (
+                <div className="text-center py-8 text-slate-400">
+                  Ningún evento activo o pendiente coincide con los filtros.
+                </div>
+              ) : (
+                renderTabla(eventosPrincipal)
+              )}
+
+              {eventosHistorial.length > 0 && (
+                <div className="mt-6">
+                  <button
+                    onClick={() => setHistorialAbierto((v) => !v)}
+                    className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+                  >
+                    <span className="text-xs">{historialAbierto ? '▾' : '▸'}</span>
+                    Ver historial ({eventosHistorial.length} evento{eventosHistorial.length === 1 ? '' : 's'} finalizado{eventosHistorial.length === 1 ? '' : 's'})
+                  </button>
+                  {historialAbierto && (
+                    <div className="mt-3">
+                      {renderTabla(eventosHistorial)}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </>
       )}

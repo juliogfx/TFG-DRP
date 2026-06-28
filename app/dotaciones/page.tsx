@@ -65,10 +65,20 @@ function DotacionesContent() {
   const [filtroIndicativo, setFiltroIndicativo] = useState('');
   const [filtroEstadoDot, setFiltroEstadoDot] = useState('');
 
+  // Filtro por estado de evento (afecta a la query a /api/eventos).
+  // Si entramos con eventoId por URL, abrimos el filtro a TODOS para no
+  // ocultar el evento deep-linkeado si está en otro estado.
+  const [filtroEstadoEvento, setFiltroEstadoEvento] = useState<'TODOS' | 'PENDIENTE' | 'ACTIVO' | 'FINALIZADO'>(
+    eventoIdParam ? 'TODOS' : 'ACTIVO'
+  );
+
   useEffect(() => {
     async function cargarEventos() {
       try {
-        const res = await fetch('/api/eventos');
+        const url = filtroEstadoEvento === 'TODOS'
+          ? '/api/eventos'
+          : `/api/eventos?estado=${filtroEstadoEvento}`;
+        const res = await fetch(url);
         if (!res.ok) throw new Error(`Error ${res.status}`);
         const json = await res.json();
         setEventos(json.data);
@@ -77,7 +87,7 @@ function DotacionesContent() {
       }
     }
     cargarEventos();
-  }, []);
+  }, [filtroEstadoEvento]);
 
   useEffect(() => {
     async function cargarDotaciones() {
@@ -184,6 +194,7 @@ function DotacionesContent() {
     setFiltroNombreEvento('');
     setFiltroFechaDotDesde('');
     setFiltroFechaDotHasta('');
+    setFiltroEstadoEvento('ACTIVO');
   }
 
   const eventosFiltrados = eventos.filter((ev) => {
@@ -205,7 +216,8 @@ function DotacionesContent() {
   });
 
   const hayFiltrosActivos = filtroCodigo || filtroTipoDot || filtroIndicativo || filtroEstadoDot
-    || filtroNombreEvento || filtroFechaDotDesde || filtroFechaDotHasta;
+    || filtroNombreEvento || filtroFechaDotDesde || filtroFechaDotHasta
+    || filtroEstadoEvento !== 'ACTIVO';
   const puedeCrear = !!eventoSeleccionado;
   const viendoTodos = !eventoSeleccionado;
 
@@ -227,19 +239,36 @@ function DotacionesContent() {
       </div>
 
       <div className="mb-6">
-        <label className="block text-sm font-medium text-slate-700 mb-1">Evento (opcional)</label>
-        <select
-          value={eventoSeleccionado ?? ''}
-          onChange={(e) => setEventoSeleccionado(e.target.value ? Number(e.target.value) : null)}
-          className="w-full max-w-md border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">Todos los eventos</option>
-          {eventosFiltrados.map((ev) => (
-            <option key={ev.id} value={ev.id}>
-              {ev.nombre} — {new Date(ev.fecha + 'T00:00:00').toLocaleDateString('es-ES')}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-end gap-4">
+          <div className="w-[150px]">
+            <label className="block text-sm font-medium text-slate-700 mb-1">Estado evento</label>
+            <select
+              value={filtroEstadoEvento}
+              onChange={(e) => setFiltroEstadoEvento(e.target.value as typeof filtroEstadoEvento)}
+              className="w-full border border-slate-300 rounded-md px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="TODOS">Todos</option>
+              <option value="PENDIENTE">Pendiente</option>
+              <option value="ACTIVO">Activo</option>
+              <option value="FINALIZADO">Finalizado</option>
+            </select>
+          </div>
+          <div className="flex-1 max-w-md">
+            <label className="block text-sm font-medium text-slate-700 mb-1">Evento (opcional)</label>
+            <select
+              value={eventoSeleccionado ?? ''}
+              onChange={(e) => setEventoSeleccionado(e.target.value ? Number(e.target.value) : null)}
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Todos los eventos</option>
+              {eventosFiltrados.map((ev) => (
+                <option key={ev.id} value={ev.id}>
+                  {ev.nombre} — {new Date(ev.fecha + 'T00:00:00').toLocaleDateString('es-ES')}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
         {viendoTodos && (
           <p className="text-xs text-slate-400 mt-1">
             Mostrando dotaciones de todos los eventos. Selecciona uno para crear nuevas dotaciones.

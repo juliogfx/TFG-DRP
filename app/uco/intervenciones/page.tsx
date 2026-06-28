@@ -75,6 +75,8 @@ function IntervencionesContent() {
   const [busquedaEvento, setBusquedaEvento] = useState('');
   const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
   const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
+  // Filtro por estado de evento (afecta a /api/eventos). Default ACTIVO.
+  const [filtroEstadoEvento, setFiltroEstadoEvento] = useState<'TODOS' | 'PENDIENTE' | 'ACTIVO' | 'FINALIZADO'>('ACTIVO');
 
   // Filtros de intervenciones
   const [filtroEstado, setFiltroEstado] = useState<'TODAS' | 'EN_CURSO' | 'CERRADAS'>(
@@ -106,24 +108,36 @@ function IntervencionesContent() {
   const [guardando, setGuardando] = useState(false);
   const [errorEditar, setErrorEditar] = useState<string | null>(null);
 
-  // Carga catálogos (eventos + sintomatologías una sola vez)
+  // Sintomatologías: catálogo estable, se carga una sola vez.
   useEffect(() => {
-    async function cargarCatalogos() {
+    async function cargarSint() {
       try {
-        const [resEv, resSint] = await Promise.all([
-          fetch('/api/eventos'),
-          fetch('/api/sintomatologias'),
-        ]);
-        const jsonEv = await resEv.json();
+        const resSint = await fetch('/api/sintomatologias');
         const jsonSint = await resSint.json();
-        setEventos(jsonEv.data ?? []);
         setSintomatologias(jsonSint.data ?? []);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Error al cargar catálogos');
+        setError(e instanceof Error ? e.message : 'Error al cargar sintomatologías');
       }
     }
-    cargarCatalogos();
+    cargarSint();
   }, []);
+
+  // Eventos: recarga cuando cambia el filtro de estado.
+  useEffect(() => {
+    async function cargarEventos() {
+      try {
+        const url = filtroEstadoEvento === 'TODOS'
+          ? '/api/eventos'
+          : `/api/eventos?estado=${filtroEstadoEvento}`;
+        const resEv = await fetch(url);
+        const jsonEv = await resEv.json();
+        setEventos(jsonEv.data ?? []);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Error al cargar eventos');
+      }
+    }
+    cargarEventos();
+  }, [filtroEstadoEvento]);
 
   const recargar = useCallback(async () => {
     if (!eventoId) return;
@@ -169,6 +183,7 @@ function IntervencionesContent() {
     setBusquedaEvento('');
     setFiltroFechaDesde('');
     setFiltroFechaHasta('');
+    setFiltroEstadoEvento('ACTIVO');
     setEventoId(null);
     setIntervenciones([]);
     setDotaciones([]);
@@ -314,9 +329,22 @@ function IntervencionesContent() {
         </div>
       </div>
 
-      {/* Bloque unificado de filtros — fila 1: evento, fila 2: fechas + filtros intervenciones */}
+      {/* Bloque unificado de filtros — fila 1: estado + búsqueda + selector evento; fila 2: fechas + filtros intervenciones */}
       <div className="mb-6 p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
-        <div className="flex gap-2">
+        <div className="flex items-end gap-4">
+          <div className="w-[150px]">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Estado evento</label>
+            <select
+              value={filtroEstadoEvento}
+              onChange={(e) => setFiltroEstadoEvento(e.target.value as typeof filtroEstadoEvento)}
+              className="w-full border border-slate-300 rounded-md px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="TODOS">Todos</option>
+              <option value="PENDIENTE">Pendiente</option>
+              <option value="ACTIVO">Activo</option>
+              <option value="FINALIZADO">Finalizado</option>
+            </select>
+          </div>
           <input
             type="text"
             value={busquedaEvento}
@@ -336,7 +364,7 @@ function IntervencionesContent() {
               setFiltroResolucion('TODAS');
               setIntervenciones([]);
             }}
-            className="flex-1 max-w-xs border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-[250px] border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Selecciona un evento...</option>
             {eventosFiltrados.map((ev) => (
@@ -450,51 +478,52 @@ function IntervencionesContent() {
             </p>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-slate-200">
-              <table className="w-full text-xs">
+              <table className="w-full table-fixed text-xs">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="text-left px-3 py-2 font-medium text-slate-600">Nº</th>
-                    <th className="text-left px-3 py-2 font-medium text-slate-600">Estado</th>
-                    <th className="text-left px-3 py-2 font-medium text-slate-600">Dotación</th>
-                    <th className="text-left px-3 py-2 font-medium text-slate-600">Sintomatología</th>
-                    <th className="text-left px-3 py-2 font-medium text-slate-600">Gravedad</th>
-                    <th className="text-left px-3 py-2 font-medium text-slate-600">Aviso</th>
-                    <th className="text-left px-3 py-2 font-medium text-slate-600">Resolución</th>
-                    <th className="text-right px-3 py-2 font-medium text-slate-600">Acciones</th>
+                    <th className="w-[6%] text-left px-3 py-2 font-medium text-slate-600">Nº</th>
+                    <th className="w-[9%] text-left px-3 py-2 font-medium text-slate-600">Estado</th>
+                    <th className="w-[10%] text-left px-3 py-2 font-medium text-slate-600">Dotación</th>
+                    <th className="w-[22%] text-left px-3 py-2 font-medium text-slate-600">Sintomatología</th>
+                    <th className="w-[11%] text-left px-3 py-2 font-medium text-slate-600">Gravedad</th>
+                    <th className="w-[8%] text-left px-3 py-2 font-medium text-slate-600">Aviso</th>
+                    <th className="w-[26%] text-left px-3 py-2 font-medium text-slate-600">Resolución</th>
+                    <th className="w-[8%] text-right px-3 py-2 font-medium text-slate-600">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filtradas.map((i) => (
+                  {filtradas.map((i) => {
+                    const sintomatologia = i.sintomatologia?.tipo ?? '—';
+                    const resolucion = i.altaEnLugar ? 'Alta en lugar'
+                      : i.trasladoClinica ? 'Clínica'
+                      : i.trasladoHospital ? `Hospital${i.hospitalDestino ? ` · ${i.hospitalDestino}` : ''}`
+                      : '—';
+                    return (
                     <tr
                       key={i.id}
                       onClick={() => abrirModalVer(i)}
                       className="hover:bg-slate-50 transition-colors cursor-pointer"
                     >
-                      <td className="px-3 py-2 font-mono font-bold text-slate-900">#{i.numeroIntervencion}</td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 font-mono font-bold text-slate-900 truncate">#{i.numeroIntervencion}</td>
+                      <td className="px-3 py-2 truncate">
                         <span className={`px-2 py-0.5 rounded-full font-medium text-xs ${i.abierta ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
                           {i.abierta ? 'En curso' : 'Cerrada'}
                         </span>
                       </td>
-                      <td className="px-3 py-2 font-mono text-slate-700">
+                      <td className="px-3 py-2 font-mono text-slate-700 truncate">
                         {i.dotacionActiva.codigo}
                         {i.dotacionApoyo && <span className="text-slate-400"> +{i.dotacionApoyo.codigo}</span>}
                       </td>
-                      <td className="px-3 py-2 text-slate-600">{i.sintomatologia?.tipo ?? '—'}</td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 text-slate-600 truncate" title={sintomatologia}>{sintomatologia}</td>
+                      <td className="px-3 py-2 truncate">
                         <span className={`px-2 py-0.5 rounded-full font-medium text-xs ${GRAVEDAD_STYLES[i.gravedad]}`}>
                           {i.gravedad}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-slate-500 font-mono">
+                      <td className="px-3 py-2 text-slate-500 font-mono truncate">
                         {i.horaAviso ? new Date(i.horaAviso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '—'}
                       </td>
-                      <td className="px-3 py-2 text-slate-500">
-                        {i.altaEnLugar ? 'Alta en lugar'
-                          : i.trasladoClinica ? 'Clínica'
-                          : i.trasladoHospital ? `Hospital${i.hospitalDestino ? ` · ${i.hospitalDestino}` : ''}`
-                          : '—'}
-                      </td>
+                      <td className="px-3 py-2 text-slate-500 truncate" title={resolucion}>{resolucion}</td>
                       <td className="px-3 py-2 text-right">
                         <button
                           onClick={(e) => {
@@ -521,7 +550,8 @@ function IntervencionesContent() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
