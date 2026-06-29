@@ -10,6 +10,7 @@ import type {
   CreatePlantillaInput,
   AplicarPlantillaResult,
 } from '@/types/plantilla';
+import { getMaterialEstandarParaTipo, esDotacionDelta } from '@/lib/db/plantilla-material';
 
 const plantillaSelect = {
   id: true,
@@ -188,6 +189,11 @@ export async function aplicarPlantillaAEvento(
       posicionesCreadas++;
 
       const tipo = tipoDotacionDePuesto(pp.puesto.nombre, nombre);
+      // F1.4 — pre-rellenar controlMaterial con la plantilla del tipo,
+      // salvo DELTA (material variable según enfermero).
+      const propuestaMaterial = esDotacionDelta(nombre)
+        ? null
+        : getMaterialEstandarParaTipo(tipo);
       await tx.dotacion.create({
         data: {
           eventoId,
@@ -196,6 +202,7 @@ export async function aplicarPlantillaAEvento(
           personalMinimo: pp.personalMinimo,
           posicionId: posicion.id,
           estado: 'CL0_DISPONIBLE',
+          ...(propuestaMaterial !== null && { controlMaterial: propuestaMaterial as object }),
         },
       });
       dotacionesCreadas++;

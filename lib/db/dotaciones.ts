@@ -27,6 +27,7 @@ import type {
   TipoMaterial,
   EstadoWalkie,
 } from '@/types/dotacion';
+import { getMaterialEstandarParaTipo, esDotacionDelta } from '@/lib/db/plantilla-material';
 
 const posicionSelect = { id: true, nombre: true, sector: true } as const;
 const eventoListSelect = { id: true, nombre: true, fecha: true } as const;
@@ -262,6 +263,12 @@ export async function getDotacionById(id: number): Promise<DotacionDetalle | nul
  * Crea una nueva Dotación en la base de datos.
  */
 export async function createDotacion(input: CreateDotacionInput): Promise<DotacionDetalle> {
+  // F1.4 — pre-rellenar controlMaterial con la plantilla estándar del
+  // tipo, salvo para DELTA (material variable, queda en null). El UCO
+  // ajusta luego desde la pantalla de control de material.
+  const propuesta = esDotacionDelta(input.codigo)
+    ? null
+    : getMaterialEstandarParaTipo(input.tipo);
   const dotacion = await prisma.dotacion.create({
     data: {
       eventoId: input.eventoId,
@@ -270,6 +277,7 @@ export async function createDotacion(input: CreateDotacionInput): Promise<Dotaci
       personalMinimo: input.personalMinimo,
       indicativo: input.indicativo ?? null,
       posicionId: input.posicionId ?? null,
+      ...(propuesta !== null && { controlMaterial: propuesta as object }),
     },
   });
   return (await getDotacionById(dotacion.id))!;

@@ -292,6 +292,10 @@ function FilaControlMaterial({ fila, modo, guardando, setLocal, guardar, onAddWa
   // 'CL.AV.' es nombre de posición (F1.2), no de dotación, por eso antes
   // la condición nunca era true y los inputs TºMin/TºMax no se renderizaban.
   const esClinicaAvanzada = fila.tipo === 'AVANZADA';
+  // F1.4 — DELTA es la única dotación sin plantilla de material fija
+  // (varía según el enfermero asignado). Lo señalamos en la columna
+  // EQ.MED+DUE para que el UCO sepa que tiene que rellenarlo a mano.
+  const esDelta = fila.codigo.toUpperCase().startsWith('DELTA');
 
   function commit(cambios: Partial<ControlMaterialItem>) {
     const anterior = fila;
@@ -418,18 +422,28 @@ function FilaControlMaterial({ fila, modo, guardando, setLocal, guardar, onAddWa
       <td className="px-2 py-1.5 text-center text-slate-700">{fila.plazas}</td>
       <td className="px-2 py-1.5">
         {tango ? null : (
-          <input
-            type="text"
-            defaultValue={fila.eqMedDue ?? ''}
-            disabled={!enEntrega}
-            placeholder="—"
-            onBlur={(e) => {
-              const v = e.target.value.trim() || null;
-              if (v === (fila.eqMedDue ?? null)) return;
-              commit({ eqMedDue: v });
-            }}
-            className="w-[90px] border border-slate-200 rounded px-1 py-0.5 text-xs disabled:bg-slate-50 disabled:text-slate-500"
-          />
+          <div className="flex flex-col gap-0.5">
+            <input
+              type="text"
+              defaultValue={fila.eqMedDue ?? ''}
+              disabled={!enEntrega}
+              placeholder={esDelta ? 'Enfermero asignado' : '—'}
+              onBlur={(e) => {
+                const v = e.target.value.trim() || null;
+                if (v === (fila.eqMedDue ?? null)) return;
+                commit({ eqMedDue: v });
+              }}
+              className="w-[120px] border border-slate-200 rounded px-1 py-0.5 text-xs disabled:bg-slate-50 disabled:text-slate-500"
+            />
+            {esDelta && (
+              <span
+                className="text-[10px] text-amber-700 italic"
+                title="DELTA: el material varía según el enfermero asignado — no hay plantilla fija."
+              >
+                ⚠ Material variable
+              </span>
+            )}
+          </div>
         )}
       </td>
       <CeldaConNumero    valor={fila.botMed}     onChange={(v) => commit({ botMed: v })} />
