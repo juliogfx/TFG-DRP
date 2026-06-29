@@ -14,7 +14,83 @@
 
 import { prisma } from '@/lib/db/prisma';
 import type { EstadoEvento } from '@prisma/client';
-import type { EventoListItem, EventoDetalle, CreateEventoInput, UpdateEventoInput } from '@/types/evento';
+import type { EventoListItem, EventoDetalle, CreateEventoInput, UpdateEventoInput, EstadoEventoLiteral } from '@/types/evento';
+
+/**
+ * Combina una fecha (Date a medianoche local) con una hora HH:mm en un
+ * Date que representa el instante exacto en la zona horaria del servidor.
+ * Devuelve null si la hora no es un string HH:mm válido.
+ *
+ * NOTA: trabaja en TZ local del servidor. En desarrollo coincide con la TZ
+ * del usuario; en producción asume que el servidor está alineado con la TZ
+ * del evento (UTC en Vercel por defecto — para España hay un desfase de
+ * 1–2h que ya se aceptaba en el resto del proyecto).
+ */
+function combinarFechaHora(fecha: Date, horaHHmm: string | null): Date | null {
+  if (!horaHHmm) return null;
+  const partes = horaHHmm.split(':');
+  if (partes.length < 2) return null;
+  const hh = parseInt(partes[0], 10);
+  const mm = parseInt(partes[1], 10);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+  const d = new Date(fecha);
+  d.setHours(hh, mm, 0, 0);
+  return d;
+}
+
+/**
+ * F3.1 — Decide si un evento debe transicionar automáticamente de estado
+ * en función de su fecha + horaInicioEvento / horaFinEvento.
+ *
+ *   PENDIENTE  + now ≥ inicio → ACTIVO
+ *   ACTIVO     + now ≥ fin    → FINALIZADO
+ *   FINALIZADO                → no-op (estado terminal)
+ *
+ * Si faltan los datos (sin horaInicio o sin horaFin) no se hace nada.
+ * Devuelve el estado nuevo si hay transición, o null si no aplica.
+ */
+function decidirNuevoEstado(
+  estadoActual: EstadoEventoLiteral,
+  fecha: Date,
+  horaInicio: string | null,
+  horaFin: string | null,
+): EstadoEventoLiteral | null {
+  if (estadoActual === 'FINALIZADO') return null;
+  const ahora = new Date();
+  if (estadoActual === 'ACTIVO') {
+    const inst = combinarFechaHora(fecha, horaFin);
+    if (inst && ahora >= inst) return 'FINALIZADO';
+    return null;
+  }
+  // PENDIENTE
+  // Si ya estamos pasados la hora fin, saltamos directo a FINALIZADO.
+  const instFin = combinarFechaHora(fecha, horaFin);
+  if (instFin && ahora >= instFin) return 'FINALIZADO';
+  const instInicio = combinarFechaHora(fecha, horaInicio);
+  if (instInicio && ahora >= instInicio) return 'ACTIVO';
+  return null;
+}
+
+/**
+ * F3.1 — Aplica decidirNuevoEstado a un evento y persiste si hay cambio.
+ * Devuelve el estado vigente (nuevo si hubo transición, actual si no).
+ *
+ * Esta función está pensada para llamarse desde GET /api/eventos[/id]
+ * antes de devolver el evento. No hay cron en MVP: el check se ejecuta
+ * cada vez que alguien consulta el recurso.
+ */
+export async function checkYActualizarEstadoEvento(evento: {
+  id: number;
+  estado: EstadoEventoLiteral;
+  fecha: Date;
+  horaInicioEvento: string | null;
+  horaFinEvento: string | null;
+}): Promise<EstadoEventoLiteral> {
+  const nuevo = decidirNuevoEstado(evento.estado, evento.fecha, evento.horaInicioEvento, evento.horaFinEvento);
+  if (!nuevo) return evento.estado;
+  await prisma.evento.update({ where: { id: evento.id }, data: { estado: nuevo } });
+  return nuevo;
+}
 
 const ubicacionSelect = { id: true, nombre: true, codigo: true } as const;
 const ubicacionDetalleSelect = { id: true, nombre: true, codigo: true, direccion: true, aforoMaximo: true } as const;
@@ -34,7 +110,9 @@ export async function getEventos(estado?: EstadoEvento): Promise<EventoListItem[
   const eventos = await prisma.evento.findMany({
     where: {
       deletedAt: null,
-      ...(estado ? { estado } : {}),
+      // Si llega ?estado=X aplicamos el filtro tras la posible transición
+      // automática — ver lógica más abajo. Aquí leemos sin filtrar para
+      // poder reevaluar el estado de los que estuvieran al borde.
     },
     select: {
       id: true,
@@ -44,6 +122,8 @@ export async function getEventos(estado?: EstadoEvento): Promise<EventoListItem[
       rival: true,
       aforoPrevisto: true,
       temporada: true,
+      horaInicioEvento: true,
+      horaFinEvento: true,
       ubicacion: { select: ubicacionSelect },
       tipoEvento: { select: tipoEventoSelect },
       dotaciones: { where: { deletedAt: null }, select: { id: true } },
@@ -51,12 +131,33 @@ export async function getEventos(estado?: EstadoEvento): Promise<EventoListItem[
     orderBy: { fecha: 'desc' },
   });
 
-  return eventos.map((e: (typeof eventos)[number]) => ({
+  // F3.1 — transición automática PENDIENTE→ACTIVO→FINALIZADO según hora.
+  // Persistimos los cambios secuencialmente (típicamente 0–3 en una sola
+  // petición; la lista no es enorme y evitamos complicar con $transaction).
+  const eventosActualizados = await Promise.all(
+    eventos.map(async (e: (typeof eventos)[number]) => {
+      const estadoVigente = await checkYActualizarEstadoEvento({
+        id: e.id,
+        estado: e.estado as EstadoEventoLiteral,
+        fecha: e.fecha,
+        horaInicioEvento: e.horaInicioEvento ?? null,
+        horaFinEvento: e.horaFinEvento ?? null,
+      });
+      return { ...e, estado: estadoVigente };
+    })
+  );
+
+  // Aplicamos el filtro ?estado= sobre el estado vigente (post-transición).
+  const filtrados = estado ? eventosActualizados.filter((e) => e.estado === estado) : eventosActualizados;
+
+  return filtrados.map((e) => ({
     ...e,
     fecha: e.fecha.toISOString().split('T')[0],
     numeroDotaciones: e.dotaciones.length,
     dotaciones: undefined,
-  })) as EventoListItem[];
+    horaInicioEvento: undefined,
+    horaFinEvento: undefined,
+  })) as unknown as EventoListItem[];
 }
 
 /**
@@ -69,7 +170,7 @@ export async function getEventoById(id: number): Promise<EventoDetalle | null> {
   const evento = await prisma.evento.findFirst({
     where: { id, deletedAt: null },
     select: {
-      id: true, nombre: true, fecha: true, rival: true,
+      id: true, nombre: true, fecha: true, estado: true, rival: true,
       aforoPrevisto: true, aforoEstimado: true, temporada: true,
       directorMedico: true, observaciones: true,
       horaIncorporacionSspp: true, horaFinalizacionSspp: true, horaInicioEvento: true, horaFinEvento: true,
@@ -90,8 +191,18 @@ export async function getEventoById(id: number): Promise<EventoDetalle | null> {
 
   if (!evento) return null;
 
+  // F3.1 — check de transición automática antes de devolver.
+  const estadoVigente = await checkYActualizarEstadoEvento({
+    id: evento.id,
+    estado: evento.estado as EstadoEventoLiteral,
+    fecha: evento.fecha,
+    horaInicioEvento: evento.horaInicioEvento ?? null,
+    horaFinEvento: evento.horaFinEvento ?? null,
+  });
+
   return {
     ...evento,
+    estado: estadoVigente,
     fecha: evento.fecha.toISOString().split('T')[0],
     horaIncorporacionSspp: evento.horaIncorporacionSspp?.toISOString() ?? null,
     horaFinalizacionSspp: evento.horaFinalizacionSspp?.toISOString() ?? null,
@@ -158,6 +269,7 @@ export async function updateEvento(id: number, input: UpdateEventoInput): Promis
       ...(input.nombre !== undefined && { nombre: input.nombre }),
       ...(input.ubicacionId !== undefined && { ubicacionId: input.ubicacionId }),
       ...(input.fecha !== undefined && { fecha: new Date(input.fecha) }),
+      ...(input.estado !== undefined && { estado: input.estado }),
       ...(input.tipoEventoId !== undefined && { tipoEventoId: input.tipoEventoId }),
       ...(input.rival !== undefined && { rival: input.rival }),
       ...(input.aforoPrevisto !== undefined && { aforoPrevisto: input.aforoPrevisto }),

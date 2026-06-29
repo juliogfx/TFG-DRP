@@ -62,6 +62,7 @@ export default function EventosPage() {
   const [filtroEstadoEvento, setFiltroEstadoEvento] = useState<FiltroEstadoEvento>('ACTIVO');
   const { eventos, loading, error, recargar } = useEventos(filtroEstadoEvento);
   const [eliminando, setEliminando] = useState<number | null>(null);
+  const [cambiandoEstado, setCambiandoEstado] = useState<number | null>(null);
   const [historialAbierto, setHistorialAbierto] = useState(false);
 
   // Catálogos para filtros
@@ -92,6 +93,33 @@ export default function EventosPage() {
     }
     cargarCatalogos();
   }, []);
+
+  // F3.1 — transición manual de estado del evento. PENDIENTE→ACTIVO o
+  // ACTIVO→FINALIZADO con confirmación. El backend revalida en el GET
+  // siguiente; aquí solo persistimos el cambio explícito que pide el UCO.
+  async function handleCambiarEstadoEvento(id: number, nuevoEstado: 'ACTIVO' | 'FINALIZADO', nombre: string) {
+    const mensaje = nuevoEstado === 'ACTIVO'
+      ? `¿Activar el evento "${nombre}"? Pasará a estado ACTIVO.`
+      : `¿Finalizar el evento "${nombre}"? Pasará a estado FINALIZADO y desaparecerá del listado principal. Las intervenciones abiertas NO se cierran.`;
+    if (!window.confirm(mensaje)) return;
+    setCambiandoEstado(id);
+    try {
+      const res = await fetch(`/api/eventos/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: nuevoEstado }),
+      });
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.error ?? `Error ${res.status}`);
+      }
+      await recargar();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error al cambiar el estado');
+    } finally {
+      setCambiandoEstado(null);
+    }
+  }
 
   async function handleEliminar(id: number, nombre: string) {
     if (!window.confirm(`¿Eliminar el evento "${nombre}"? Esta acción no se puede deshacer.`)) return;
@@ -176,6 +204,24 @@ export default function EventosPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right space-x-2">
+                  {evento.estado === 'PENDIENTE' && (
+                    <button
+                      onClick={() => handleCambiarEstadoEvento(evento.id, 'ACTIVO', evento.nombre)}
+                      disabled={cambiandoEstado === evento.id}
+                      className="text-green-700 hover:text-green-900 text-sm font-medium disabled:opacity-50"
+                    >
+                      {cambiandoEstado === evento.id ? '...' : 'Activar'}
+                    </button>
+                  )}
+                  {evento.estado === 'ACTIVO' && (
+                    <button
+                      onClick={() => handleCambiarEstadoEvento(evento.id, 'FINALIZADO', evento.nombre)}
+                      disabled={cambiandoEstado === evento.id}
+                      className="text-slate-600 hover:text-slate-900 text-sm font-medium disabled:opacity-50"
+                    >
+                      {cambiandoEstado === evento.id ? '...' : 'Finalizar'}
+                    </button>
+                  )}
                   <button
                     onClick={() => router.push(`/eventos/${evento.id}/editar`)}
                     className="text-blue-600 hover:text-blue-800 text-sm font-medium"

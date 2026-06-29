@@ -29,6 +29,7 @@ export interface EventoDetalle {
   id: number;
   nombre: string;
   fecha: string;
+  estado: EstadoEventoLiteral;
   ubicacion: { id: number; nombre: string; codigo: string; direccion: string; aforoMaximo: number | null; };
   tipoEvento: { id: number; nombre: string; codigo: string; } | null;
   rival: string | null;
@@ -74,6 +75,7 @@ export interface UpdateEventoInput {
   nombre?: string;
   ubicacionId?: number;
   fecha?: string;
+  estado?: EstadoEventoLiteral;
   tipoEventoId?: number;
   rival?: string;
   aforoPrevisto?: number;
