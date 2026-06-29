@@ -329,7 +329,10 @@ async function main() {
   }
   console.log('✓ Equipos deportivos creados');
 
-  const passwordHash = await bcrypt.hash('dev-only-cambiar-en-produccion', 10);
+  const passwordHash = await bcrypt.hash(
+    process.env.SEED_PASSWORD ?? 'dev-only-cambiar-en-produccion',
+    10
+  );
 
   const [usuarioUco] = await Promise.all([
     prisma.usuarioSistema.upsert({
