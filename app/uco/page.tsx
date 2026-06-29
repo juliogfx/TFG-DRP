@@ -137,6 +137,37 @@ function calcularModo(numDotaciones: number): ModoTarjeta {
 }
 
 /**
+ * Aviso F2.6: cuando el UCO selecciona en un formulario una dotación que
+ * NO está en CL0_DISPONIBLE, se muestra un mensaje informativo bajo el
+ * selector. Si la dotación es la misma que ya estaba asignada (caso del
+ * modal de editar al abrir) no se muestra: no estamos reasignando.
+ * No bloquea — el UCO puede asignarla igualmente; backend la pondrá en CL1.
+ */
+function AvisoDotacionNoDisponible({
+  dotacionId,
+  dotaciones,
+  dotacionAnteriorId,
+}: {
+  dotacionId: number | null;
+  dotaciones: Array<{ id: number; codigo: string; estado: string }>;
+  dotacionAnteriorId?: number | null;
+}) {
+  if (!dotacionId) return null;
+  if (dotacionAnteriorId != null && dotacionId === dotacionAnteriorId) return null;
+  const dot = dotaciones.find((d) => d.id === dotacionId);
+  if (!dot || dot.estado === 'CL0_DISPONIBLE') return null;
+  const clave = ESTADO_CLAVE[dot.estado] ?? '';
+  const label = ESTADO_LABELS[dot.estado] ?? dot.estado;
+  return (
+    <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
+      ⚠ La dotación <span className="font-mono font-semibold">{dot.codigo}</span> está en{' '}
+      <span className="font-medium">{clave} {label}</span> — asignarla igualmente la pondrá en{' '}
+      <span className="font-medium">CL1 En camino</span>.
+    </p>
+  );
+}
+
+/**
  * Tarjeta de dotación con tamaño y contenido adaptativos al modo.
  * Si la dotación está EN_INTERVENCION, la tarjeta entera es clicable
  * hacia /uco/intervenciones con filtro de dotación activa.
@@ -147,15 +178,25 @@ function TarjetaDotacion({
   eventoId,
   modo,
   intervencionActiva,
+  onLiberar,
 }: {
   dotacion: DotacionEstado;
   eventoId: number;
   modo: ModoTarjeta;
   intervencionActiva: { id: number; numeroIntervencion: number } | null;
+  /** Callback para liberar la dotación (CL2 → CL0). Solo se muestra el
+   *  botón si el padre pasa el callback. */
+  onLiberar?: (dotacionId: number) => void;
 }) {
   const router = useRouter();
   const personalCubierto = dotacion.numeroPersonasAsignadas >= dotacion.personalMinimo;
   const enIntervencion = dotacion.estado === 'CL2_EN_INTERVENCION';
+  const puedeLiberar = !!onLiberar && enIntervencion;
+
+  function clickLiberar(e: React.MouseEvent) {
+    e.stopPropagation();
+    onLiberar?.(dotacion.id);
+  }
   // Responsable de la dotación: persona con rolEnDotacion que contenga
   // "responsable"; si no hay tal rol formal aún, fallback al primer asignado.
   const responsable =
@@ -188,6 +229,25 @@ function TarjetaDotacion({
   const pillTexto = `${ESTADO_CLAVE[dotacion.estado] ?? ''} ${ESTADO_LABELS[dotacion.estado] ?? dotacion.estado}`.trim();
   const tituloHover = `${dotacion.codigo} — ${pillTexto}`;
 
+  const botonLiberar = puedeLiberar ? (
+    <button
+      onClick={clickLiberar}
+      title="Liberar dotación (CL0 Disponible)"
+      className="bg-green-100 hover:bg-green-200 text-green-700 font-medium text-[10px] px-2 py-0.5 rounded-md transition-colors whitespace-nowrap"
+    >
+      ↩ Liberar
+    </button>
+  ) : null;
+  const botonLiberarMicro = puedeLiberar ? (
+    <button
+      onClick={clickLiberar}
+      title="Liberar dotación (CL0 Disponible)"
+      className="text-[10px] text-green-700 hover:text-green-900 font-bold leading-none px-1"
+    >
+      ↩
+    </button>
+  ) : null;
+
   // MICRO — solo código + punto de color
   if (modo === 'micro') {
     return (
@@ -198,6 +258,7 @@ function TarjetaDotacion({
       >
         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${DOT_STYLES[dotacion.estado]}`} />
         <span className="text-xs font-mono font-bold text-slate-900 truncate">{dotacion.codigo}</span>
+        {botonLiberarMicro && <span className="ml-auto">{botonLiberarMicro}</span>}
       </div>
     );
   }
@@ -219,6 +280,7 @@ function TarjetaDotacion({
         <span className={`block mt-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full text-center ${pillClase}`}>
           {pillTexto}
         </span>
+        {botonLiberar && <div className="mt-1 flex justify-center">{botonLiberar}</div>}
       </div>
     );
   }
@@ -241,6 +303,7 @@ function TarjetaDotacion({
         <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full ${pillClase}`}>
           {pillTexto}
         </span>
+        {botonLiberar && <div className="mt-2">{botonLiberar}</div>}
       </div>
     );
   }
@@ -295,6 +358,7 @@ function TarjetaDotacion({
             Ver historial →
           </button>
         )}
+        {botonLiberar && <div className="mt-2">{botonLiberar}</div>}
       </div>
     );
   }
@@ -355,6 +419,7 @@ function TarjetaDotacion({
           Ver historial →
         </button>
       )}
+      {botonLiberar && <div className="mt-2">{botonLiberar}</div>}
     </div>
   );
 }
@@ -373,10 +438,16 @@ const ESTADO_INTERV_LABEL: Record<EstadoIntervencion, string> = {
 
 function TablaIntervenciones({
   intervenciones,
+  estadoDotacionPorId,
   onRowClick,
+  onLlegada,
 }: {
   intervenciones: IntervencionListItem[];
+  /** Mapa dotacionId → estado actual de la dotación, para decidir si mostrar
+   *  el botón "Llegada" (solo si la dotación activa está en CL1_EN_CAMINO). */
+  estadoDotacionPorId: Map<number, string>;
   onRowClick?: (i: IntervencionListItem) => void;
+  onLlegada?: (i: IntervencionListItem) => void;
 }) {
   return (
     <div className="overflow-x-auto overflow-y-auto max-h-[400px] rounded-lg border border-slate-200">
@@ -385,13 +456,13 @@ function TablaIntervenciones({
           <tr>
             <th className="w-[5%]  text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Nº</th>
             <th className="w-[10%] text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Dotación</th>
-            <th className="w-[16%] text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Sintomatología</th>
+            <th className="w-[14%] text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Sintomatología</th>
             <th className="w-[11%] text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Estado</th>
-            <th className="w-[10%] text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Gravedad</th>
-            <th className="w-[7%]  text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Aviso</th>
-            <th className="w-[7%]  text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Llegada</th>
-            <th className="w-[17%] text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Apoyo</th>
-            <th className="w-[17%] text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Resolución</th>
+            <th className="w-[9%]  text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Gravedad</th>
+            <th className="w-[6%]  text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Aviso</th>
+            <th className="w-[12%] text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Llegada</th>
+            <th className="w-[15%] text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Apoyo</th>
+            <th className="w-[18%] text-left px-3 py-2 font-medium text-slate-600 bg-slate-50">Resolución</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -403,6 +474,13 @@ function TablaIntervenciones({
               : '—';
             const sintomatologia = i.sintomatologia?.tipo ?? '—';
             const apoyoCodigos = [i.dotacionApoyo?.codigo, i.dotacionTraslado?.codigo].filter(Boolean).join(', ') || '—';
+            const estadoDot = i.dotacionActiva ? estadoDotacionPorId.get(i.dotacionActiva.id) : undefined;
+            const puedeMarcarLlegada =
+              !!onLlegada &&
+              i.estado === 'EN_CURSO' &&
+              !!i.dotacionActiva &&
+              estadoDot === 'CL1_EN_CAMINO' &&
+              !i.horaLlegada;
             return (
               <tr
                 key={i.id}
@@ -430,7 +508,15 @@ function TablaIntervenciones({
                 <td className="px-3 py-2 text-slate-500 font-mono truncate">
                   {i.horaLlegada
                     ? new Date(i.horaLlegada).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
-                    : '—'}
+                    : puedeMarcarLlegada ? (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onLlegada?.(i); }}
+                        title="Confirmar llegada al lugar"
+                        className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium text-[10px] px-2 py-0.5 rounded-md transition-colors whitespace-nowrap"
+                      >
+                        📍 Llegada
+                      </button>
+                    ) : '—'}
                 </td>
                 <td className="px-3 py-2 font-mono text-slate-600 truncate" title={apoyoCodigos}>{apoyoCodigos}</td>
                 <td className="px-3 py-2 text-slate-500 truncate" title={resolucion}>{resolucion}</td>
@@ -647,6 +733,49 @@ function UCOContent() {
     }
   }
 
+  // F2.1 — Confirmar llegada al lugar:
+  // marca horaLlegada y pone la dotación activa en CL2_EN_INTERVENCION.
+  // Optimismo UI: actualizamos local antes del fetchEstado para evitar parpadeo.
+  async function handleMarcarLlegada(i: IntervencionListItem) {
+    try {
+      const res = await fetch(`/api/intervenciones/${i.id}/llegada`, { method: 'PUT' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
+      setIntervenciones((prev) => prev.map((x) => x.id === json.data.id ? json.data : x));
+      if (i.dotacionActiva?.id) {
+        const dotId = i.dotacionActiva.id;
+        setEstadoUCO((prev) => prev ? {
+          ...prev,
+          dotaciones: prev.dotaciones.map((d) =>
+            d.id === dotId ? { ...d, estado: 'CL2_EN_INTERVENCION' as const } : d
+          ),
+        } : prev);
+      }
+      await fetchEstado(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al registrar llegada');
+    }
+  }
+
+  // F2.1 — Liberar dotación: la dotación vuelve a CL0_DISPONIBLE.
+  // NO cierra la intervención asociada — son estados independientes.
+  async function handleLiberarDotacion(dotacionId: number) {
+    try {
+      const res = await fetch(`/api/dotaciones/${dotacionId}/liberar`, { method: 'PUT' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
+      setEstadoUCO((prev) => prev ? {
+        ...prev,
+        dotaciones: prev.dotaciones.map((d) =>
+          d.id === dotacionId ? { ...d, estado: 'CL0_DISPONIBLE' as const } : d
+        ),
+      } : prev);
+      await fetchEstado(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al liberar dotación');
+    }
+  }
+
   async function handleGuardarEdicion() {
     if (!modalEditar) return;
     setErrorEditar(null);
@@ -699,6 +828,10 @@ function UCOContent() {
       intervencionActivaPorDotacion.set(i.dotacionActiva.id, i);
     }
   });
+  // Mapa dotacionId → estado actual de la dotación, usado por la tabla para
+  // decidir si mostrar el botón "Llegada" en la fila.
+  const estadoDotacionPorId = new Map<number, string>();
+  estadoUCO?.dotaciones.forEach((d) => estadoDotacionPorId.set(d.id, d.estado));
 
   const eventosFiltrados = eventos.filter((ev) => {
     if (busquedaEvento && !ev.nombre.toLowerCase().includes(busquedaEvento.toLowerCase())) return false;
@@ -940,6 +1073,8 @@ function UCOContent() {
             {intervencionesAbiertas.length > 0 ? (
               <TablaIntervenciones
                 intervenciones={intervencionesAbiertas}
+                estadoDotacionPorId={estadoDotacionPorId}
+                onLlegada={handleMarcarLlegada}
                 onRowClick={(i) => {
                   setFormEditar({
                     dotacionActivaId: i.dotacionActiva?.id ?? null,
@@ -987,6 +1122,7 @@ function UCOContent() {
                       eventoId={eventoSeleccionado!}
                       modo={modoTarjeta}
                       intervencionActiva={i ? { id: i.id, numeroIntervencion: i.numeroIntervencion } : null}
+                      onLiberar={handleLiberarDotacion}
                     />
                     );
                   })}
@@ -1060,6 +1196,10 @@ function UCOContent() {
                     </option>
                   ))}
                 </select>
+                <AvisoDotacionNoDisponible
+                  dotacionId={formIntervencion.dotacionActivaId === '' ? null : Number(formIntervencion.dotacionActivaId)}
+                  dotaciones={estadoUCO?.dotaciones ?? []}
+                />
               </div>
 
               <div>
@@ -1238,6 +1378,11 @@ function UCOContent() {
                   <option value="">Sin asignar</option>
                   {estadoUCO?.dotaciones.map((d) => <option key={d.id} value={d.id}>{d.codigo} — {TIPO_LABELS[d.tipo] ?? d.tipo}</option>)}
                 </select>
+                <AvisoDotacionNoDisponible
+                  dotacionId={formEditar.dotacionActivaId ?? null}
+                  dotaciones={estadoUCO?.dotaciones ?? []}
+                  dotacionAnteriorId={modalEditar?.dotacionActiva?.id ?? null}
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Sintomatología</label>

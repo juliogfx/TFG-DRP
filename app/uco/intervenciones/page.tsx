@@ -48,6 +48,38 @@ const RESOLUCION_LABEL: Record<ResolucionIntervencion, string> = {
   TRASLADO_HOSPITALARIO: 'Traslado hospitalario',
 };
 
+const ESTADO_DOT_LABEL: Record<string, string> = {
+  CL0_DISPONIBLE:           'CL0 Disponible',
+  CL1_EN_CAMINO:            'CL1 En camino',
+  CL2_EN_INTERVENCION:      'CL2 En intervención',
+  CL3_NO_DISPONIBLE:        'CL3 No disponible',
+  CL5_SOLICITUD_AYUDA:      'CL5 Solicitud ayuda',
+  CL6_SITUACION_CONFLICTIVA:'CL6 Sit. conflictiva',
+};
+
+/** Aviso F2.6: dotación no disponible. No bloquea, solo informa. */
+function AvisoDotacionNoDisponible({
+  dotacionId,
+  dotaciones,
+  dotacionAnteriorId,
+}: {
+  dotacionId: number | null;
+  dotaciones: DotacionListItem[];
+  dotacionAnteriorId?: number | null;
+}) {
+  if (!dotacionId) return null;
+  if (dotacionAnteriorId != null && dotacionId === dotacionAnteriorId) return null;
+  const dot = dotaciones.find((d) => d.id === dotacionId);
+  if (!dot || dot.estado === 'CL0_DISPONIBLE') return null;
+  return (
+    <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
+      ⚠ La dotación <span className="font-mono font-semibold">{dot.codigo}</span> está en{' '}
+      <span className="font-medium">{ESTADO_DOT_LABEL[dot.estado] ?? dot.estado}</span> — asignarla
+      igualmente la pondrá en <span className="font-medium">CL1 En camino</span>.
+    </p>
+  );
+}
+
 const FORM_INICIAL = {
   dotacionActivaId: '' as number | '',
   sintomatologiaId: '' as number | '',
@@ -682,6 +714,10 @@ function IntervencionesContent() {
                     <option key={d.id} value={d.id}>{d.codigo} — {TIPO_LABELS[d.tipo] ?? d.tipo}</option>
                   ))}
                 </select>
+                <AvisoDotacionNoDisponible
+                  dotacionId={formNueva.dotacionActivaId === '' ? null : Number(formNueva.dotacionActivaId)}
+                  dotaciones={dotaciones}
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Sintomatología *</label>
@@ -848,6 +884,11 @@ function IntervencionesContent() {
                     <option value="">Sin asignar</option>
                     {dotaciones.map((d) => <option key={d.id} value={d.id}>{d.codigo} — {TIPO_LABELS[d.tipo] ?? d.tipo}</option>)}
                   </select>
+                  <AvisoDotacionNoDisponible
+                    dotacionId={formEditar.dotacionActivaId ?? null}
+                    dotaciones={dotaciones}
+                    dotacionAnteriorId={modalIntervencion?.intervencion.dotacionActiva?.id ?? null}
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Sintomatología</label>

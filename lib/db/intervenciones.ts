@@ -193,9 +193,15 @@ export async function getSintomatologias(): Promise<SintomatologiaItem[]> {
  * Actualiza los campos de una intervención existente.
  * Todos los campos son opcionales (PATCH semántico).
  *
- * Lógica de estado:
+ * Lógica de estado de intervención:
  *   - Si llega resolucion + horaFinal → estado = CERRADA
- *   - Si llega dotacionActivaId y el estado actual es PENDIENTE_DOTACION → EN_CURSO
+ *   - Si llega dotacionActivaId no nulo y antes era nulo → EN_CURSO
+ *   - Si llega dotacionActivaId nulo y antes había una → PENDIENTE_DOTACION
+ *
+ * Transiciones automáticas de claves de dotación (F2.1):
+ *   - Asignar dotación nueva → dotación nueva pasa a CL1_EN_CAMINO
+ *   - Reasignar (cambiar de dotA a dotB) → dotA a CL0_DISPONIBLE, dotB a CL1_EN_CAMINO
+ *   - Desasignar (dotación → null) → dotA a CL0_DISPONIBLE
  *
  * Al cerrar, los Boolean altaEnLugar/trasladoClinica/altaEnClinica/trasladoHospital
  * se actualizan en función de `resolucion` para mantener compatibilidad.
@@ -215,23 +221,45 @@ export async function updateIntervencion(
   }
 
   const cerrando = input.resolucion !== undefined && input.resolucion !== null && input.horaFinal;
-  const asignandoDotacion =
-    input.dotacionActivaId !== undefined &&
-    input.dotacionActivaId !== null &&
-    actual.dotacionActivaId === null;
+  const dotacionAnteriorId = actual.dotacionActivaId;
+  const dotacionPropuestaId = input.dotacionActivaId;
+  const cambioDotacion = dotacionPropuestaId !== undefined && dotacionPropuestaId !== dotacionAnteriorId;
+  const asignandoNueva = cambioDotacion && dotacionPropuestaId !== null;
+  const desasignando = cambioDotacion && dotacionPropuestaId === null;
 
   let estadoCalculado: EstadoIntervencion | undefined;
   if (cerrando) {
     estadoCalculado = 'CERRADA';
-  } else if (asignandoDotacion && actual.estado === 'PENDIENTE_DOTACION') {
+  } else if (asignandoNueva && actual.estado === 'PENDIENTE_DOTACION') {
     estadoCalculado = 'EN_CURSO';
+  } else if (desasignando) {
+    estadoCalculado = 'PENDIENTE_DOTACION';
   }
 
   const flagsResolucion = input.resolucion !== undefined ? flagsDesdeResolucion(input.resolucion) : {};
 
-  const intervencion = await prisma.intervencion.update({
-    where: { id },
-    data: {
+  const intervencion = await prisma.$transaction(async (tx) => {
+    // Transiciones de claves de dotación.
+    // El UCO confirma la llegada (CL1→CL2) en un endpoint aparte; aquí solo
+    // tratamos asignar/desasignar/reasignar.
+    if (cambioDotacion) {
+      if (dotacionAnteriorId) {
+        await tx.dotacion.update({
+          where: { id: dotacionAnteriorId },
+          data: { estado: 'CL0_DISPONIBLE' },
+        });
+      }
+      if (asignandoNueva && dotacionPropuestaId) {
+        await tx.dotacion.update({
+          where: { id: dotacionPropuestaId },
+          data: { estado: 'CL1_EN_CAMINO' },
+        });
+      }
+    }
+
+    return tx.intervencion.update({
+      where: { id },
+      data: {
       ...(input.dotacionActivaId !== undefined && { dotacionActivaId: input.dotacionActivaId }),
       ...(input.sintomatologiaId !== undefined && { sintomatologiaId: input.sintomatologiaId }),
       ...(input.gravedad !== undefined && { gravedad: input.gravedad }),
@@ -259,8 +287,51 @@ export async function updateIntervencion(
       ...(input.dotacionTrasladoId !== undefined && { dotacionTrasladoId: input.dotacionTrasladoId }),
       ...(input.observaciones !== undefined && { observaciones: input.observaciones }),
       ...(estadoCalculado && { estado: estadoCalculado }),
-    },
-    select: intervencionSelect,
+      },
+      select: intervencionSelect,
+    });
+  });
+  return serializarIntervencion(intervencion);
+}
+
+/**
+ * Marca la llegada de la dotación al lugar de una intervención (F2.1).
+ * Operación atómica:
+ *   - intervencion.horaLlegada = now()
+ *   - dotacion_activa.estado = CL2_EN_INTERVENCION
+ *
+ * Precondiciones (validadas en el endpoint):
+ *   - La intervención debe tener dotacionActivaId
+ *   - El estado de la dotación debe ser CL1_EN_CAMINO
+ *   - horaLlegada aún no debe estar registrada
+ */
+export async function marcarLlegadaIntervencion(id: number): Promise<IntervencionListItem> {
+  const actual = await prisma.intervencion.findUnique({
+    where: { id },
+    select: { dotacionActivaId: true, horaLlegada: true, estado: true },
+  });
+  if (!actual) {
+    const err: Error & { code?: string } = new Error(`No existe intervención con id ${id}`);
+    err.code = 'P2025';
+    throw err;
+  }
+  if (!actual.dotacionActivaId) {
+    throw new Error('La intervención no tiene dotación asignada — no se puede registrar llegada.');
+  }
+  if (actual.horaLlegada) {
+    throw new Error('La llegada ya estaba registrada para esta intervención.');
+  }
+
+  const intervencion = await prisma.$transaction(async (tx) => {
+    await tx.dotacion.update({
+      where: { id: actual.dotacionActivaId! },
+      data: { estado: 'CL2_EN_INTERVENCION' },
+    });
+    return tx.intervencion.update({
+      where: { id },
+      data: { horaLlegada: new Date(), estado: 'EN_CURSO' },
+      select: intervencionSelect,
+    });
   });
   return serializarIntervencion(intervencion);
 }
