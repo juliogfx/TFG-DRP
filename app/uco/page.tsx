@@ -48,12 +48,6 @@ const DOT_STYLES: Record<string, string> = {
   NO_OPERATIVA: 'bg-red-500',
 };
 
-const BADGE_STYLES: Record<string, string> = {
-  DISPONIBLE: 'bg-green-100 text-green-800',
-  EN_INTERVENCION: 'bg-yellow-100 text-yellow-800',
-  NO_OPERATIVA: 'bg-red-100 text-red-800',
-};
-
 const ESTADO_LABELS: Record<string, string> = {
   DISPONIBLE: 'Disponible',
   EN_INTERVENCION: 'En intervención',
@@ -106,16 +100,6 @@ const FORM_INTERVENCION_INICIAL = {
 };
 
 const POLLING_INTERVAL_MS = 30_000;
-
-/**
- * Convierte ISO string a formato datetime-local (YYYY-MM-DDTHH:mm) en zona local.
- */
-function isoToDatetimeLocal(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 function calcularModo(numDotaciones: number): ModoTarjeta {
   if (numDotaciones <= 8) return 'amplio';

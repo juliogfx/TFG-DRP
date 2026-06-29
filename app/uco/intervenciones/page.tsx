@@ -39,16 +39,6 @@ const FORM_INICIAL = {
   hospitalDestino: '',
 };
 
-/**
- * Convierte ISO string a formato datetime-local (YYYY-MM-DDTHH:mm) en zona local.
- */
-function isoToDatetimeLocal(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 function formatearHora(iso: string | null): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('es-ES', {
