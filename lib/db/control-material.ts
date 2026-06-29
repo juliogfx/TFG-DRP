@@ -159,3 +159,139 @@ export async function updateControlMaterialDotacion(
     tempMax: finalBlob.tempMax ?? null,
   };
 }
+
+/**
+ * Lee el ControlMaterialItem completo de una dotación. Sirve para devolver
+ * estado fresco tras las operaciones de walkies. Lo dejo aparte de
+ * updateControlMaterialDotacion porque comparten la misma forma.
+ */
+async function leerItemDotacion(dotacionId: number): Promise<ControlMaterialItem> {
+  const dot = await prisma.dotacion.findUniqueOrThrow({
+    where: { id: dotacionId },
+    select: {
+      id: true, codigo: true, tipo: true, indicativo: true, personalMinimo: true,
+      controlMaterial: true,
+      walkies: {
+        where: { devuelto: false },
+        select: { id: true, devuelto: true, walkie: { select: { numero: true } } },
+      },
+    },
+  });
+  const blob = leerBlob(dot.controlMaterial);
+  return {
+    dotacionId: dot.id,
+    codigo: dot.codigo,
+    tipo: dot.tipo as string,
+    indicativo: dot.indicativo,
+    plazas: dot.personalMinimo,
+    eqMedDue: blob.eqMedDue ?? null,
+    botMed: blob.botMed ?? null,
+    botDue: blob.botDue ?? null,
+    monitor: blob.monitor ?? null,
+    balaO2: blob.balaO2 ?? null,
+    ampularios: blob.ampularios ?? null,
+    morfico: blob.morfico ?? null,
+    collarines: blob.collarines ?? null,
+    walkies: dot.walkies.map((w): WalkieEntrega => ({
+      asignacionId: w.id,
+      numero: w.walkie.numero,
+      devuelto: w.devuelto,
+    })),
+    carpetas: blob.carpetas ?? null,
+    tarjetas: blob.tarjetas ?? null,
+    partesRecibidos: blob.partesRecibidos ?? null,
+    bat: blob.bat ?? null,
+    tempMin: blob.tempMin ?? null,
+    tempMax: blob.tempMax ?? null,
+  };
+}
+
+/**
+ * Añade un walkie a una dotación en un evento. F1.7:
+ *   - Upsert sobre Walkie por `numero` (auto-crea si no existía — el UCO
+ *     introduce el número físico tal cual lo tiene en mano).
+ *   - Crea AsignacionWalkie nueva. Si existía una previa devuelta para
+ *     ese walkie en el mismo evento, la reactiva en lugar de duplicar.
+ *   - Si el walkie ya está activo en OTRA dotación del mismo evento,
+ *     se devuelve un error 409 (la BD lo bloquearía por el UNIQUE
+ *     (walkieId, eventoId) — lo detectamos antes para dar mensaje claro).
+ */
+export async function addWalkieToDotacion(
+  eventoId: number,
+  dotacionId: number,
+  numero: string,
+): Promise<ControlMaterialItem> {
+  const num = numero.trim();
+  if (!num) throw new Error('El número de walkie no puede estar vacío.');
+
+  const dot = await prisma.dotacion.findFirst({
+    where: { id: dotacionId, eventoId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!dot) {
+    const err: Error & { code?: string } = new Error(`Dotación ${dotacionId} no encontrada en el evento ${eventoId}`);
+    err.code = 'P2025';
+    throw err;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const walkie = await tx.walkie.upsert({
+      where: { numero: num },
+      update: {},
+      create: { numero: num },
+    });
+
+    const existente = await tx.asignacionWalkie.findUnique({
+      where: { walkieId_eventoId: { walkieId: walkie.id, eventoId } },
+      select: { id: true, dotacionId: true, devuelto: true },
+    });
+
+    if (existente) {
+      if (!existente.devuelto && existente.dotacionId !== dotacionId) {
+        const err: Error & { code?: string } = new Error(
+          `El walkie nº ${num} ya está asignado a otra dotación en este evento.`
+        );
+        err.code = 'P2002';
+        throw err;
+      }
+      // Reactivar (estaba devuelto o pertenecía a esta misma dotación).
+      await tx.asignacionWalkie.update({
+        where: { id: existente.id },
+        data: {
+          dotacionId,
+          devuelto: false,
+          fechaDevolucion: null,
+          fechaAsignacion: new Date(),
+        },
+      });
+    } else {
+      await tx.asignacionWalkie.create({
+        data: { walkieId: walkie.id, dotacionId, eventoId, devuelto: false },
+      });
+    }
+  });
+
+  return leerItemDotacion(dotacionId);
+}
+
+/**
+ * Elimina la asignación de un walkie. Hard-delete porque el caso de uso
+ * en ENTREGA es "me equivoqué de número, lo quito". Para "fin de evento,
+ * walkie devuelto", se usa la columna `devuelto` del flujo DEVOLUCIÓN.
+ */
+export async function removeWalkieAsignacion(asignacionId: number, dotacionId: number): Promise<ControlMaterialItem> {
+  const existe = await prisma.asignacionWalkie.findUnique({
+    where: { id: asignacionId },
+    select: { id: true, dotacionId: true },
+  });
+  if (!existe) {
+    const err: Error & { code?: string } = new Error(`No existe asignación de walkie con id ${asignacionId}`);
+    err.code = 'P2025';
+    throw err;
+  }
+  if (existe.dotacionId !== dotacionId) {
+    throw new Error('La asignación de walkie no pertenece a la dotación indicada.');
+  }
+  await prisma.asignacionWalkie.delete({ where: { id: asignacionId } });
+  return leerItemDotacion(dotacionId);
+}

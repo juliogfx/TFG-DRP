@@ -124,6 +124,38 @@ export default function ControlMaterialPage() {
     setFilas((prev) => prev.map((f) => f.dotacionId === dotacionId ? { ...f, ...parcial } : f));
   }
 
+  /** Añade un walkie a una dotación. Refresca la fila con la respuesta del backend. */
+  const addWalkie = useCallback(async (dotacionId: number, numero: string): Promise<string | null> => {
+    try {
+      const res = await fetch(`/api/eventos/${eventoId}/control-material/${dotacionId}/walkies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numero }),
+      });
+      const json = await res.json();
+      if (!res.ok) return json.error ?? `Error ${res.status}`;
+      setFilas((prev) => prev.map((f) => f.dotacionId === dotacionId ? json.data : f));
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : 'Error al añadir walkie';
+    }
+  }, [eventoId]);
+
+  /** Quita la asignación de un walkie (hard-delete). */
+  const removeWalkie = useCallback(async (dotacionId: number, asignacionId: number): Promise<string | null> => {
+    try {
+      const res = await fetch(`/api/eventos/${eventoId}/control-material/${dotacionId}/walkies/${asignacionId}`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+      if (!res.ok) return json.error ?? `Error ${res.status}`;
+      setFilas((prev) => prev.map((f) => f.dotacionId === dotacionId ? json.data : f));
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : 'Error al quitar walkie';
+    }
+  }, [eventoId]);
+
   /** Cambia un campo numérico que estará en ENTREGA: número de id, cantidad, etc. */
   const enEntrega = modo === 'ENTREGA';
   const enDevolucion = modo === 'DEVOLUCION';
@@ -207,6 +239,9 @@ export default function ControlMaterialPage() {
                   guardando={guardandoIds.has(f.dotacionId)}
                   setLocal={setLocal}
                   guardar={guardar}
+                  onAddWalkie={addWalkie}
+                  onRemoveWalkie={removeWalkie}
+                  onError={setError}
                 />
               ))}
             </tbody>
@@ -227,9 +262,29 @@ interface FilaProps {
   guardando: boolean;
   setLocal: (id: number, parcial: Partial<ControlMaterialItem>) => void;
   guardar: (id: number, cambios: Partial<ControlMaterialItem>, anterior: ControlMaterialItem) => Promise<void>;
+  onAddWalkie: (dotacionId: number, numero: string) => Promise<string | null>;
+  onRemoveWalkie: (dotacionId: number, asignacionId: number) => Promise<string | null>;
+  onError: (msg: string) => void;
 }
 
-function FilaControlMaterial({ fila, modo, guardando, setLocal, guardar }: FilaProps) {
+function FilaControlMaterial({ fila, modo, guardando, setLocal, guardar, onAddWalkie, onRemoveWalkie, onError }: FilaProps) {
+  const [nuevoWalkie, setNuevoWalkie] = useState('');
+  const [agregandoWalkie, setAgregandoWalkie] = useState(false);
+
+  async function agregarWalkie() {
+    const num = nuevoWalkie.trim();
+    if (!num) return;
+    setAgregandoWalkie(true);
+    const err = await onAddWalkie(fila.dotacionId, num);
+    setAgregandoWalkie(false);
+    if (err) { onError(err); return; }
+    setNuevoWalkie('');
+  }
+
+  async function quitarWalkie(asignacionId: number) {
+    const err = await onRemoveWalkie(fila.dotacionId, asignacionId);
+    if (err) onError(err);
+  }
   const tango = esTango(fila.codigo);
   const enEntrega = modo === 'ENTREGA';
   const enDevolucion = modo === 'DEVOLUCION';
@@ -386,29 +441,65 @@ function FilaControlMaterial({ fila, modo, guardando, setLocal, guardar }: FilaP
       <CeldaNumero       valor={fila.collarines} onChange={(v) => commit({ collarines: v })} />
       <td className="px-2 py-1.5">
         {tango ? null : (
-          fila.walkies.length === 0 ? (
-            <span className="text-slate-300 text-xs">—</span>
-          ) : (
-            <div className="flex flex-wrap gap-1">
-              {fila.walkies.map((w) => (
-                <label key={w.asignacionId} className="inline-flex items-center gap-1 bg-slate-100 rounded px-1.5 py-0.5">
-                  <span className="font-mono text-[10px]">{w.numero}</span>
-                  <input
-                    type="checkbox"
-                    checked={w.devuelto}
-                    disabled={!enDevolucion}
-                    title="DEV"
-                    onChange={(e) => {
-                      const nuevoWalkies = fila.walkies.map((x) =>
-                        x.asignacionId === w.asignacionId ? { ...x, devuelto: e.target.checked } : x
-                      );
-                      commit({ walkies: nuevoWalkies });
-                    }}
-                  />
-                </label>
-              ))}
-            </div>
-          )
+          <div className="flex flex-col gap-1">
+            {fila.walkies.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {fila.walkies.map((w) => (
+                  <span key={w.asignacionId} className="inline-flex items-center gap-1 bg-slate-100 rounded px-1.5 py-0.5">
+                    <span className="font-mono text-[10px]">{w.numero}</span>
+                    {enEntrega && (
+                      <button
+                        type="button"
+                        onClick={() => quitarWalkie(w.asignacionId)}
+                        title="Quitar walkie"
+                        className="text-red-500 hover:text-red-700 text-[10px] leading-none"
+                      >
+                        ×
+                      </button>
+                    )}
+                    {enDevolucion && (
+                      <input
+                        type="checkbox"
+                        checked={w.devuelto}
+                        title="DEV"
+                        onChange={(e) => {
+                          const nuevoWalkies = fila.walkies.map((x) =>
+                            x.asignacionId === w.asignacionId ? { ...x, devuelto: e.target.checked } : x
+                          );
+                          commit({ walkies: nuevoWalkies });
+                        }}
+                      />
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
+            {enEntrega && (
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  value={nuevoWalkie}
+                  onChange={(e) => setNuevoWalkie(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); agregarWalkie(); }
+                  }}
+                  placeholder="nº"
+                  className="w-[60px] border border-slate-200 rounded px-1 py-0.5 text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={agregarWalkie}
+                  disabled={agregandoWalkie || !nuevoWalkie.trim()}
+                  className="bg-blue-100 hover:bg-blue-200 disabled:opacity-40 text-blue-700 font-medium text-[10px] px-1.5 py-0.5 rounded"
+                >
+                  {agregandoWalkie ? '...' : '+'}
+                </button>
+              </div>
+            )}
+            {fila.walkies.length === 0 && !enEntrega && (
+              <span className="text-slate-300 text-xs">—</span>
+            )}
+          </div>
         )}
       </td>
       <CeldaCantidadDev valor={fila.carpetas} onChange={(v) => commit({ carpetas: v })} />
