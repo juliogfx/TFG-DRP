@@ -608,6 +608,97 @@ async function main() {
   await crearPosicionesEvento(evento2.id);
   console.log('✓ Posiciones creadas (53 por evento)');
 
+  /**
+   * F1.3 — Plantilla reutilizable "partido de fútbol en el Bernabéu".
+   * Es la única plantilla canónica del MVP — el resto de eventos se crean
+   * a medida. La plantilla recopila las 53 posiciones estándar; al
+   * aplicarse a un evento concreto, se clonan como Posicion + Dotacion.
+   *
+   * Idempotencia: upsert por nombre. Las PlantillaPosicion no tienen
+   * unique constraint, así que las borramos y recreamos para evitar
+   * duplicados al re-ejecutar el seed.
+   */
+  async function crearPlantillaFutbolBernabeu() {
+    const puestos = await prisma.puesto.findMany({ select: { id: true, nombre: true } });
+    const puestoPorNombre = new Map(puestos.map((p) => [p.nombre, p.id]));
+    const idDe = (n: string) => puestoPorNombre.get(n) ?? null;
+    function puestoParaPosicion(nombrePos: string): number | null {
+      if (nombrePos.startsWith('CL.'))                       return idDe('Clínica de campaña');
+      if (nombrePos.startsWith('UVI'))                       return idDe('UVI Móvil');
+      if (nombrePos.startsWith('SVB'))                       return idDe('SVB');
+      if (nombrePos === 'CAMNOR' || nombrePos === 'CAMSUR')  return idDe('Camilla de campo');
+      if (nombrePos === 'BANQ.')                             return idDe('Banquillo');
+      if (nombrePos === 'UCO' || nombrePos === 'UCO1')       return idDe('UCO');
+      if (nombrePos.startsWith('DELTA'))                     return idDe('DELTA');
+      if (nombrePos.startsWith('MIKE'))                      return idDe('MIKE');
+      if (nombrePos.startsWith('LIMA'))                      return idDe('LIMA');
+      if (nombrePos.startsWith('PAPA'))                      return idDe('PAPA');
+      if (nombrePos === 'Z95-1' || nombrePos === 'Z95-1G')   return idDe('Z95');
+      return idDe('ZULU');
+    }
+    const fallback = idDe('Botiquín') ?? puestos[0]?.id ?? null;
+    if (!fallback) {
+      console.warn('  ⚠ No hay puestos en el catálogo — saltando plantilla');
+      return;
+    }
+
+    const PISTA = [
+      'BANQ.', 'CAMNOR', 'CAMSUR', 'UVI3', 'UVI4',
+      'Z0.1', 'Z0.2', 'Z0.3', 'Z0.4', 'Z0.5', 'Z0.6', 'Z0.7', 'Z0.8', 'Z0.9',
+      'Z0.10', 'Z0.11', 'Z0.12', 'DELTA2', 'MIKE2',
+      'Z.20', 'Z.40', 'LIMA2', 'Z95-1', 'UCO', 'PAPA2',
+    ];
+    const GRADA = [
+      'UVI1', 'UVI2', 'Z200', 'Z217', 'Z218', 'SVB1Z318', 'SVB2Z317',
+      'Z443', 'Z501', 'Z520', 'Z529', 'Z710',
+      'CL.AV.', 'CL.P18', 'CL.P19', 'CL.T.A', 'CL.T.C', 'CL.T.D',
+      'CL.NV6', 'CL.PALCO', 'DELTA1', 'MIKE1', 'Z30', 'Z50',
+      'LIMA1', 'UCO1', 'Z95-1G', 'PAPA1',
+    ];
+    const todas = [
+      ...PISTA.map((n) => ({ nombre: n, sector: 'Pista'  as const })),
+      ...GRADA.map((n) => ({ nombre: n, sector: 'Grada'  as const })),
+    ];
+
+    const plantilla = await prisma.plantillaEvento.upsert({
+      where: { nombre: 'BER-PLA-RMD-FUTBOL' },
+      update: {
+        empresaId: empresaContratada.id,
+        tipoEventoId: tipoLiga.id,
+        ubicacionId: bernabeu.id,
+        descripcion: 'Plantilla estándar partido de fútbol Bernabéu',
+        activa: true,
+      },
+      create: {
+        nombre: 'BER-PLA-RMD-FUTBOL',
+        codigoLoc: 'BER',
+        codigoEvt: 'PLA',
+        codigoCtr: 'RMD',
+        textoLibre: 'FUTBOL',
+        empresaId: empresaContratada.id,
+        tipoEventoId: tipoLiga.id,
+        ubicacionId: bernabeu.id,
+        descripcion: 'Plantilla estándar partido de fútbol Bernabéu',
+        activa: true,
+      },
+    });
+
+    // Borrar y recrear PlantillaPosicion (no hay unique para hacer upsert).
+    await prisma.plantillaPosicion.deleteMany({ where: { plantillaId: plantilla.id } });
+    await prisma.plantillaPosicion.createMany({
+      data: todas.map((p) => ({
+        plantillaId: plantilla.id,
+        puestoId: puestoParaPosicion(p.nombre) ?? fallback,
+        nombreSugerido: p.nombre,
+        personalMinimo: 2,
+        sector: p.sector,
+      })),
+    });
+  }
+
+  await crearPlantillaFutbolBernabeu();
+  console.log('✓ Plantilla BER-PLA-RMD-FUTBOL creada (53 posiciones)');
+
   console.log('\n✅ Seed completado. Datos de prueba listos en Supabase.');
 }
 

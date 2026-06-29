@@ -12,16 +12,27 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { CreateEventoInput } from '@/types/evento';
 
 interface OpcionCatalogo { id: number; nombre: string; codigo: string; }
 interface OpcionEmpresa extends OpcionCatalogo { tipo: 'PROMOTOR' | 'CONTRATADA' | 'FACULTATIVOS'; }
 interface OpcionEquipo { id: number; nombre: string; codigo: string; deporte: string; }
+interface OpcionPlantilla { id: number; nombre: string; descripcion: string | null; numeroPosiciones: number }
 
 export default function NuevoEventoPage() {
+  return (
+    <Suspense fallback={<div className="text-center py-12 text-slate-500">Cargando...</div>}>
+      <NuevoEventoContent />
+    </Suspense>
+  );
+}
+
+function NuevoEventoContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const plantillaIdParam = searchParams.get('plantillaId');
 
   const [form, setForm] = useState<CreateEventoInput>({
     nombre: '',
@@ -43,6 +54,8 @@ export default function NuevoEventoPage() {
   const [tiposEvento, setTiposEvento] = useState<OpcionCatalogo[]>([]);
   const [empresas, setEmpresas] = useState<OpcionEmpresa[]>([]);
   const [equipos, setEquipos] = useState<OpcionEquipo[]>([]);
+  const [plantillas, setPlantillas] = useState<OpcionPlantilla[]>([]);
+  const [plantillaId, setPlantillaId] = useState<number | ''>(plantillaIdParam ? Number(plantillaIdParam) : '');
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cargandoCatalogos, setCargandoCatalogos] = useState(true);
@@ -50,19 +63,21 @@ export default function NuevoEventoPage() {
   useEffect(() => {
     async function cargarCatalogos() {
       try {
-        const [resUbic, resTipos, resEmpresas, resEquipos] = await Promise.all([
+        const [resUbic, resTipos, resEmpresas, resEquipos, resPlant] = await Promise.all([
           fetch('/api/ubicaciones'),
           fetch('/api/tipos-evento'),
           fetch('/api/empresas'),
           fetch('/api/equipos'),
+          fetch('/api/plantillas'),
         ]);
-        const [dataUbic, dataTipos, dataEmpresas, dataEquipos] = await Promise.all([
-          resUbic.json(), resTipos.json(), resEmpresas.json(), resEquipos.json(),
+        const [dataUbic, dataTipos, dataEmpresas, dataEquipos, dataPlant] = await Promise.all([
+          resUbic.json(), resTipos.json(), resEmpresas.json(), resEquipos.json(), resPlant.json(),
         ]);
         setUbicaciones(dataUbic.data ?? []);
         setTiposEvento(dataTipos.data ?? []);
         setEmpresas(dataEmpresas.data ?? []);
         setEquipos(dataEquipos.data ?? []);
+        setPlantillas(dataPlant.data ?? []);
       } catch {
         setError('Error al cargar los datos del formulario. Recarga la página.');
       } finally {
@@ -95,6 +110,22 @@ export default function NuevoEventoPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
+
+      // F1.3 — si el usuario eligió plantilla, la aplicamos al evento
+      // recién creado. El evento queda creado igualmente si falla, así
+      // que devolvemos al usuario a /eventos con el aviso.
+      const eventoIdCreado = json.data?.id;
+      if (plantillaId && eventoIdCreado) {
+        const resAplicar = await fetch(`/api/plantillas/${plantillaId}/aplicar`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventoId: eventoIdCreado }),
+        });
+        if (!resAplicar.ok) {
+          const errJson = await resAplicar.json();
+          throw new Error(`Evento creado pero no se aplicó la plantilla: ${errJson.error ?? `Error ${resAplicar.status}`}`);
+        }
+      }
       router.push('/eventos');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al crear el evento');
@@ -211,6 +242,26 @@ export default function NuevoEventoPage() {
       )}
 
       <div className="space-y-5">
+        {plantillas.length > 0 && (
+          <div className="border border-blue-200 bg-blue-50 rounded-lg p-3">
+            <label className="block text-sm font-medium text-blue-900 mb-1">Crear desde plantilla (opcional)</label>
+            <select
+              value={plantillaId}
+              onChange={(e) => setPlantillaId(e.target.value ? Number(e.target.value) : '')}
+              className="w-full border border-blue-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">— Sin plantilla (evento vacío) —</option>
+              {plantillas.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre} ({p.numeroPosiciones} pos.){p.descripcion ? ` — ${p.descripcion}` : ''}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-blue-700 mt-1">
+              Al seleccionar plantilla, tras crear el evento se generan automáticamente las posiciones y dotaciones definidas.
+            </p>
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Nombre *</label>
           <input type="text" value={form.nombre} onChange={(e) => actualizarCampo('nombre', e.target.value)}
