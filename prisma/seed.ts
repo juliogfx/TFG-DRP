@@ -213,6 +213,41 @@ async function main() {
       update: {},
       create: { nombre: 'SVB', descripcion: 'Soporte Vital Básico — ambulancia ligera', requiereVehiculo: true },
     }),
+    prisma.puesto.upsert({
+      where: { nombre: 'DELTA' },
+      update: {},
+      create: { nombre: 'DELTA', descripcion: 'Dotación con enfermero/DUE', requiereVehiculo: false },
+    }),
+    prisma.puesto.upsert({
+      where: { nombre: 'MIKE' },
+      update: {},
+      create: { nombre: 'MIKE', descripcion: 'Dotación tipo UVI sin traslado hospitalario', requiereVehiculo: false },
+    }),
+    prisma.puesto.upsert({
+      where: { nombre: 'LIMA' },
+      update: {},
+      create: { nombre: 'LIMA', descripcion: 'Logística de apoyo — recaderos', requiereVehiculo: false },
+    }),
+    prisma.puesto.upsert({
+      where: { nombre: 'PAPA' },
+      update: {},
+      create: { nombre: 'PAPA', descripcion: 'Psicosocial', requiereVehiculo: false },
+    }),
+    prisma.puesto.upsert({
+      where: { nombre: 'Z95' },
+      update: {},
+      create: { nombre: 'Z95', descripcion: 'Coordinadores', requiereVehiculo: false },
+    }),
+    prisma.puesto.upsert({
+      where: { nombre: 'ZULU' },
+      update: {},
+      create: { nombre: 'ZULU', descripcion: 'Dotación asistencial', requiereVehiculo: false },
+    }),
+    prisma.puesto.upsert({
+      where: { nombre: 'Camilla de campo' },
+      update: {},
+      create: { nombre: 'Camilla de campo', descripcion: 'Camilla fija en el campo — 4 componentes', requiereVehiculo: false },
+    }),
   ]);
   console.log('✓ Puestos creados');
 
@@ -498,13 +533,35 @@ async function main() {
   /**
    * Crea las 53 posiciones del Bernabéu (F1.2) para un evento dado.
    * 25 en PISTA + 28 en GRADA. Todas con componentesMinimo=2 y
-   * componentesMaximo=4. Puesto por defecto = primer puesto del catálogo
-   * (típicamente "Botiquín") — los puestos específicos se ajustan luego
-   * desde la UI de posiciones.
+   * componentesMaximo=4. El puesto se deduce del nombre de la posición
+   * (clínica/UVI/SVB/banquillo/etc.) — ver mapearPuestoPorNombre abajo.
+   * Las posiciones sin patrón conocido caen a ZULU (dotación asistencial).
    */
   async function crearPosicionesEvento(eventoId: number) {
-    const puestoPorDefecto = await prisma.puesto.findFirst({ orderBy: { id: 'asc' }, select: { id: true } });
-    if (!puestoPorDefecto) {
+    const puestos = await prisma.puesto.findMany({ select: { id: true, nombre: true } });
+    const puestoPorNombre = new Map(puestos.map((p) => [p.nombre, p.id]));
+    function idDe(nombre: string): number | null {
+      return puestoPorNombre.get(nombre) ?? null;
+    }
+    function mapearPuestoPorNombre(nombrePos: string): number | null {
+      if (nombrePos.startsWith('CL.'))                       return idDe('Clínica de campaña');
+      if (nombrePos.startsWith('UVI'))                       return idDe('UVI Móvil');
+      if (nombrePos.startsWith('SVB'))                       return idDe('SVB');
+      if (nombrePos === 'CAMNOR' || nombrePos === 'CAMSUR')  return idDe('Camilla de campo');
+      if (nombrePos === 'BANQ.')                             return idDe('Banquillo');
+      if (nombrePos === 'UCO' || nombrePos === 'UCO1')       return idDe('UCO');
+      if (nombrePos.startsWith('DELTA'))                     return idDe('DELTA');
+      if (nombrePos.startsWith('MIKE'))                      return idDe('MIKE');
+      if (nombrePos.startsWith('LIMA'))                      return idDe('LIMA');
+      if (nombrePos.startsWith('PAPA'))                      return idDe('PAPA');
+      if (nombrePos === 'Z95-1' || nombrePos === 'Z95-1G')   return idDe('Z95');
+      // Resto: ZULU (Z0.x, Z200, Z217, Z218, Z30, Z50, Z443, Z501, Z520,
+      // Z529, Z710, Z.20, Z.40, etc.)
+      return idDe('ZULU');
+    }
+
+    const fallback = idDe('Botiquín') ?? puestos[0]?.id ?? null;
+    if (!fallback) {
       console.warn('  ⚠ No hay puestos en el catálogo — saltando posiciones');
       return;
     }
@@ -530,14 +587,15 @@ async function main() {
 
     for (const f of filas) {
       const codigoQr = `${eventoId}-${f.nombre}`;
+      const puestoId = mapearPuestoPorNombre(f.nombre) ?? fallback;
       await prisma.posicion.upsert({
         where: { codigoQr },
-        update: {},
+        update: { puestoId, zona: f.zona, componentesMinimo: 2, componentesMaximo: 4 },
         create: {
           eventoId,
           nombre: f.nombre,
           codigoQr,
-          puestoId: puestoPorDefecto.id,
+          puestoId,
           zona: f.zona,
           componentesMinimo: 2,
           componentesMaximo: 4,
