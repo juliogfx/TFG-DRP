@@ -87,12 +87,11 @@ const FORM_INICIAL = {
   uco: 'UCO1',
   sector: '',
   lugar: '',
-  horaAviso: '',
+  horaAviso: null as string | null,
   dotacionApoyoId: '' as number | '',
-  altaEnLugar: false,
-  trasladoClinica: false,
-  trasladoHospital: false,
+  resolucion: null as ResolucionIntervencion | null,
   hospitalDestino: '',
+  clinicaDestinoId: null as number | null,
 };
 
 function formatearHora(iso: string | null): string {
@@ -284,6 +283,8 @@ function IntervencionesContent() {
     if (!eventoId) return;
     setRegistrando(true);
     try {
+      const esHospital = formNueva.resolucion === 'TRASLADO_HOSPITALARIO';
+      const esClinica = formNueva.resolucion === 'TRASLADO_CLINICA' || formNueva.resolucion === 'ALTA_EN_CLINICA';
       const body: CreateIntervencionInput = {
         eventoId,
         dotacionActivaId: formNueva.dotacionActivaId ? Number(formNueva.dotacionActivaId) : null,
@@ -292,12 +293,13 @@ function IntervencionesContent() {
         uco: formNueva.uco,
         sector: formNueva.sector.trim() || null,
         lugar: formNueva.lugar.trim() || null,
-        horaAviso: formNueva.horaAviso || undefined,
+        horaAviso: formNueva.horaAviso,
         dotacionApoyoId: formNueva.dotacionApoyoId ? Number(formNueva.dotacionApoyoId) : undefined,
-        altaEnLugar: formNueva.altaEnLugar,
-        trasladoClinica: formNueva.trasladoClinica,
-        trasladoHospital: formNueva.trasladoHospital,
-        hospitalDestino: formNueva.trasladoHospital ? formNueva.hospitalDestino || undefined : undefined,
+        resolucion: formNueva.resolucion,
+        hospitalDestino: (esHospital || (esClinica && !formNueva.clinicaDestinoId))
+          ? (formNueva.hospitalDestino || null)
+          : null,
+        clinicaDestinoId: esClinica ? formNueva.clinicaDestinoId : null,
       };
       const res = await fetch('/api/intervenciones', {
         method: 'POST',
@@ -697,7 +699,7 @@ function IntervencionesContent() {
                   <select
                     value={formNueva.uco}
                     onChange={(e) => setFormNueva((p) => ({ ...p, uco: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
                   >
                     <option value="UCO1">UCO1</option>
                     <option value="UCO2">UCO2</option>
@@ -710,7 +712,7 @@ function IntervencionesContent() {
                     value={formNueva.sector}
                     onChange={(e) => setFormNueva((p) => ({ ...p, sector: e.target.value }))}
                     placeholder="Ej: Sector A, Gol Sur, Acceso Norte..."
-                    className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
                   />
                 </div>
               </div>
@@ -721,7 +723,7 @@ function IntervencionesContent() {
                   value={formNueva.lugar}
                   onChange={(e) => setFormNueva((p) => ({ ...p, lugar: e.target.value }))}
                   placeholder="Ej: Puerta 7, Fila 3 Asiento 12..."
-                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
                 />
               </div>
               <div>
@@ -729,7 +731,7 @@ function IntervencionesContent() {
                 <select
                   value={formNueva.dotacionActivaId}
                   onChange={(e) => setFormNueva((p) => ({ ...p, dotacionActivaId: Number(e.target.value) || '' }))}
-                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
                 >
                   <option value="">Sin asignar (Pendiente dotación)</option>
                   {dotaciones.map((d) => (
@@ -746,7 +748,7 @@ function IntervencionesContent() {
                 <select
                   value={formNueva.sintomatologiaId}
                   onChange={(e) => setFormNueva((p) => ({ ...p, sintomatologiaId: Number(e.target.value) || '' }))}
-                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
                 >
                   <option value="">Seleccionar sintomatología...</option>
                   {sintomatologias.map((s) => <option key={s.id} value={s.id}>{s.tipo}</option>)}
@@ -765,17 +767,16 @@ function IntervencionesContent() {
                   ))}
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Hora de aviso</label>
-                <input type="datetime-local" value={formNueva.horaAviso}
-                  onChange={(e) => setFormNueva((p) => ({ ...p, horaAviso: e.target.value }))}
-                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500" />
-              </div>
+              <DateTimeInput
+                label="Hora de aviso"
+                value={formNueva.horaAviso}
+                onChange={(v) => setFormNueva((p) => ({ ...p, horaAviso: v }))}
+              />
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Dotación de apoyo</label>
                 <select value={formNueva.dotacionApoyoId}
                   onChange={(e) => setFormNueva((p) => ({ ...p, dotacionApoyoId: Number(e.target.value) || '' }))}
-                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500">
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
                   <option value="">Sin apoyo</option>
                   {dotaciones.filter((d) => d.id !== Number(formNueva.dotacionActivaId)).map((d) => (
                     <option key={d.id} value={d.id}>{d.codigo} — {TIPO_LABELS[d.tipo] ?? d.tipo}</option>
@@ -787,29 +788,43 @@ function IntervencionesContent() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Resolución</label>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                    <input type="checkbox" checked={formNueva.altaEnLugar}
-                      onChange={(e) => setFormNueva((p) => ({ ...p, altaEnLugar: e.target.checked, trasladoClinica: false, trasladoHospital: false }))} />
-                    Alta en el lugar
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                    <input type="checkbox" checked={formNueva.trasladoClinica}
-                      onChange={(e) => setFormNueva((p) => ({ ...p, trasladoClinica: e.target.checked, altaEnLugar: false, trasladoHospital: false }))} />
-                    Traslado a clínica
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                    <input type="checkbox" checked={formNueva.trasladoHospital}
-                      onChange={(e) => setFormNueva((p) => ({ ...p, trasladoHospital: e.target.checked, altaEnLugar: false, trasladoClinica: false }))} />
-                    Traslado hospitalario
-                  </label>
-                  {formNueva.trasladoHospital && (
-                    <input type="text" placeholder="Centro hospitalario de destino" value={formNueva.hospitalDestino}
+                <label className="block text-sm font-medium text-slate-700 mb-1">Resolución</label>
+                <select value={formNueva.resolucion ?? ''}
+                  onChange={(e) => setFormNueva((p) => ({ ...p, resolucion: (e.target.value || null) as ResolucionIntervencion | null }))}
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+                  <option value="">Sin definir</option>
+                  <option value="ALTA_EN_LUGAR">Alta en el lugar</option>
+                  <option value="TRASLADO_CLINICA">Traslado a clínica</option>
+                  <option value="ALTA_EN_CLINICA">Alta en clínica</option>
+                  <option value="TRASLADO_HOSPITALARIO">Traslado hospitalario</option>
+                </select>
+                {formNueva.resolucion === 'TRASLADO_HOSPITALARIO' && (
+                  <input type="text" placeholder="Centro hospitalario de destino" value={formNueva.hospitalDestino}
+                    onChange={(e) => setFormNueva((p) => ({ ...p, hospitalDestino: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm mt-2" />
+                )}
+                {(formNueva.resolucion === 'TRASLADO_CLINICA' || formNueva.resolucion === 'ALTA_EN_CLINICA') && (
+                  clinicasDelEvento.length > 0 ? (
+                    <select
+                      value={formNueva.clinicaDestinoId ?? ''}
+                      onChange={(e) => setFormNueva((p) => ({ ...p, clinicaDestinoId: e.target.value ? Number(e.target.value) : null }))}
+                      className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm mt-2"
+                    >
+                      <option value="">Selecciona clínica de destino...</option>
+                      {clinicasDelEvento.map((c) => (
+                        <option key={c.id} value={c.id}>{c.nombre}{c.sector ? ` · ${c.sector}` : ''}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="Clínica de destino (texto libre)"
+                      value={formNueva.hospitalDestino}
                       onChange={(e) => setFormNueva((p) => ({ ...p, hospitalDestino: e.target.value }))}
-                      className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm ml-6 focus:outline-none focus:ring-2 focus:ring-red-500" />
-                  )}
-                </div>
+                      className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm mt-2"
+                    />
+                  )
+                )}
               </div>
             </div>
 
@@ -817,7 +832,7 @@ function IntervencionesContent() {
               <button onClick={() => setShowNueva(false)} disabled={registrando}
                 className="border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-4 py-2 rounded-md transition-colors disabled:opacity-50">Cancelar</button>
               <button onClick={handleRegistrar} disabled={registrando}
-                className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-md transition-colors">
+                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-md transition-colors">
                 {registrando ? 'Registrando...' : 'Registrar intervención'}
               </button>
             </div>

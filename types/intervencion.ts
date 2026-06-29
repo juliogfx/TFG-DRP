@@ -47,14 +47,16 @@ export interface CreateIntervencionInput {
   uco?: string;
   sector?: string | null;
   lugar?: string | null;
-  horaAviso?: string;
-  horaLlegada?: string;
-  horaFinal?: string;
+  horaAviso?: string | null;
+  horaLlegada?: string | null;
+  horaFinal?: string | null;
   dotacionApoyoId?: number;
+  resolucion?: ResolucionIntervencion | null;
   altaEnLugar?: boolean;
   trasladoClinica?: boolean;
   trasladoHospital?: boolean;
-  hospitalDestino?: string;
+  hospitalDestino?: string | null;
+  clinicaDestinoId?: number | null;
   dotacionTrasladoId?: number;
   observaciones?: string;
 }

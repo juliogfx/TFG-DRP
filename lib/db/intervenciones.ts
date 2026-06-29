@@ -146,6 +146,10 @@ export async function createIntervencion(
   input: CreateIntervencionInput
 ): Promise<IntervencionListItem> {
   const estadoInicial: EstadoIntervencion = input.dotacionActivaId ? 'EN_CURSO' : 'PENDIENTE_DOTACION';
+  // El front envía `resolucion` (enum); el backend deriva los Boolean legacy
+  // a partir del enum para mantener compatibilidad sin que el cliente los
+  // tenga que enviar.
+  const flagsResolucion = input.resolucion ? flagsDesdeResolucion(input.resolucion) : null;
   const intervencion = await prisma.$transaction(async (tx) => {
     const ultima = await tx.intervencion.findFirst({
       where: { eventoId: input.eventoId },
@@ -165,14 +169,17 @@ export async function createIntervencion(
         uco: input.uco ?? 'UCO1',
         sector: input.sector ?? null,
         lugar: input.lugar ?? null,
+        resolucion: input.resolucion ?? null,
         horaAviso: input.horaAviso ? new Date(input.horaAviso) : null,
         horaLlegada: input.horaLlegada ? new Date(input.horaLlegada) : null,
         horaFinal: input.horaFinal ? new Date(input.horaFinal) : null,
         dotacionApoyoId: input.dotacionApoyoId ?? null,
-        altaEnLugar: input.altaEnLugar ?? false,
-        trasladoClinica: input.trasladoClinica ?? false,
-        trasladoHospital: input.trasladoHospital ?? false,
+        altaEnLugar:      flagsResolucion?.altaEnLugar      ?? input.altaEnLugar      ?? false,
+        trasladoClinica:  flagsResolucion?.trasladoClinica  ?? input.trasladoClinica  ?? false,
+        altaEnClinica:    flagsResolucion?.altaEnClinica    ?? false,
+        trasladoHospital: flagsResolucion?.trasladoHospital ?? input.trasladoHospital ?? false,
         hospitalDestino: input.hospitalDestino ?? null,
+        clinicaDestinoId: input.clinicaDestinoId ?? null,
         dotacionTrasladoId: input.dotacionTrasladoId ?? null,
         observaciones: input.observaciones ?? null,
       },

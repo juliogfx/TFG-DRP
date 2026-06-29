@@ -111,12 +111,11 @@ const FORM_INTERVENCION_INICIAL = {
   uco: 'UCO1',
   sector: '',
   lugar: '',
-  horaAviso: '',
+  horaAviso: null as string | null,
   dotacionApoyoId: '' as number | '',
-  altaEnLugar: false,
-  trasladoClinica: false,
-  trasladoHospital: false,
+  resolucion: null as ResolucionIntervencion | null,
   hospitalDestino: '',
+  clinicaDestinoId: null as number | null,
 };
 
 const RESOLUCION_LABEL: Record<ResolucionIntervencion, string> = {
@@ -753,6 +752,8 @@ function UCOContent() {
       // arranca EN_CURSO con horaLlegada=now(). Sin dotación, queda en
       // PENDIENTE_DOTACION (estado lo calcula el backend).
       const dotActivaId = formIntervencion.dotacionActivaId ? Number(formIntervencion.dotacionActivaId) : null;
+      const esHospital = formIntervencion.resolucion === 'TRASLADO_HOSPITALARIO';
+      const esClinica = formIntervencion.resolucion === 'TRASLADO_CLINICA' || formIntervencion.resolucion === 'ALTA_EN_CLINICA';
       const body: CreateIntervencionInput = {
         eventoId: eventoSeleccionado,
         dotacionActivaId: dotActivaId,
@@ -761,13 +762,16 @@ function UCOContent() {
         uco: formIntervencion.uco,
         sector: formIntervencion.sector.trim() || null,
         lugar: formIntervencion.lugar.trim() || null,
-        horaAviso: formIntervencion.horaAviso || undefined,
+        horaAviso: formIntervencion.horaAviso,
         horaLlegada: dotActivaId ? new Date().toISOString() : undefined,
         dotacionApoyoId: formIntervencion.dotacionApoyoId ? Number(formIntervencion.dotacionApoyoId) : undefined,
-        altaEnLugar: formIntervencion.altaEnLugar,
-        trasladoClinica: formIntervencion.trasladoClinica,
-        trasladoHospital: formIntervencion.trasladoHospital,
-        hospitalDestino: formIntervencion.trasladoHospital ? formIntervencion.hospitalDestino || undefined : undefined,
+        resolucion: formIntervencion.resolucion,
+        // hospitalDestino se reutiliza también para clínica como texto libre
+        // cuando no hay clinicaDestinoId — mapeo dictado por el spec F2.4.
+        hospitalDestino: (esHospital || (esClinica && !formIntervencion.clinicaDestinoId))
+          ? (formIntervencion.hospitalDestino || null)
+          : null,
+        clinicaDestinoId: esClinica ? formIntervencion.clinicaDestinoId : null,
       };
       const res = await fetch('/api/intervenciones', {
         method: 'POST',
@@ -1267,7 +1271,7 @@ function UCOContent() {
                   <select
                     value={formIntervencion.uco}
                     onChange={(e) => setFormIntervencion((p) => ({ ...p, uco: e.target.value }))}
-                    className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
                   >
                     <option value="UCO1">UCO1</option>
                     <option value="UCO2">UCO2</option>
@@ -1280,7 +1284,7 @@ function UCOContent() {
                     value={formIntervencion.sector}
                     onChange={(e) => setFormIntervencion((p) => ({ ...p, sector: e.target.value }))}
                     placeholder="Ej: Sector A, Gol Sur, Acceso Norte..."
-                    className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
                   />
                 </div>
               </div>
@@ -1291,7 +1295,7 @@ function UCOContent() {
                   value={formIntervencion.lugar}
                   onChange={(e) => setFormIntervencion((p) => ({ ...p, lugar: e.target.value }))}
                   placeholder="Ej: Puerta 7, Fila 3 Asiento 12..."
-                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
                 />
               </div>
               <div>
@@ -1299,7 +1303,7 @@ function UCOContent() {
                 <select
                   value={formIntervencion.dotacionActivaId}
                   onChange={(e) => setFormIntervencion((p) => ({ ...p, dotacionActivaId: Number(e.target.value) || '' }))}
-                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
                 >
                   <option value="">Sin asignar (Pendiente dotación)</option>
                   {estadoUCO?.dotaciones.map((d) => (
@@ -1319,7 +1323,7 @@ function UCOContent() {
                 <select
                   value={formIntervencion.sintomatologiaId}
                   onChange={(e) => setFormIntervencion((p) => ({ ...p, sintomatologiaId: Number(e.target.value) || '' }))}
-                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
                 >
                   <option value="">Seleccionar sintomatología...</option>
                   {sintomatologias.map((s) => (
@@ -1347,22 +1351,18 @@ function UCOContent() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Hora de aviso</label>
-                <input
-                  type="datetime-local"
-                  value={formIntervencion.horaAviso}
-                  onChange={(e) => setFormIntervencion((p) => ({ ...p, horaAviso: e.target.value }))}
-                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                />
-              </div>
+              <DateTimeInput
+                label="Hora de aviso"
+                value={formIntervencion.horaAviso}
+                onChange={(v) => setFormIntervencion((p) => ({ ...p, horaAviso: v }))}
+              />
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Dotación de apoyo</label>
                 <select
                   value={formIntervencion.dotacionApoyoId}
                   onChange={(e) => setFormIntervencion((p) => ({ ...p, dotacionApoyoId: Number(e.target.value) || '' }))}
-                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
                 >
                   <option value="">Sin apoyo</option>
                   {estadoUCO?.dotaciones
@@ -1380,48 +1380,36 @@ function UCOContent() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Resolución</label>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formIntervencion.altaEnLugar}
-                      onChange={(e) => setFormIntervencion((p) => ({
-                        ...p, altaEnLugar: e.target.checked, trasladoClinica: false, trasladoHospital: false,
-                      }))}
-                    />
-                    Alta en el lugar
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formIntervencion.trasladoClinica}
-                      onChange={(e) => setFormIntervencion((p) => ({
-                        ...p, trasladoClinica: e.target.checked, altaEnLugar: false, trasladoHospital: false,
-                      }))}
-                    />
-                    Traslado a clínica
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formIntervencion.trasladoHospital}
-                      onChange={(e) => setFormIntervencion((p) => ({
-                        ...p, trasladoHospital: e.target.checked, altaEnLugar: false, trasladoClinica: false,
-                      }))}
-                    />
-                    Traslado hospitalario
-                  </label>
-                  {formIntervencion.trasladoHospital && (
-                    <input
-                      type="text"
-                      placeholder="Centro hospitalario de destino"
-                      value={formIntervencion.hospitalDestino}
-                      onChange={(e) => setFormIntervencion((p) => ({ ...p, hospitalDestino: e.target.value }))}
-                      className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm ml-6 focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
-                  )}
-                </div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Resolución</label>
+                <select
+                  value={formIntervencion.resolucion ?? ''}
+                  onChange={(e) => setFormIntervencion((p) => ({ ...p, resolucion: (e.target.value || null) as ResolucionIntervencion | null }))}
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+                >
+                  <option value="">Sin definir</option>
+                  <option value="ALTA_EN_LUGAR">Alta en el lugar</option>
+                  <option value="TRASLADO_CLINICA">Traslado a clínica</option>
+                  <option value="ALTA_EN_CLINICA">Alta en clínica</option>
+                  <option value="TRASLADO_HOSPITALARIO">Traslado hospitalario</option>
+                </select>
+                {formIntervencion.resolucion === 'TRASLADO_HOSPITALARIO' && (
+                  <input
+                    type="text"
+                    placeholder="Centro hospitalario de destino"
+                    value={formIntervencion.hospitalDestino}
+                    onChange={(e) => setFormIntervencion((p) => ({ ...p, hospitalDestino: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm mt-2"
+                  />
+                )}
+                {(formIntervencion.resolucion === 'TRASLADO_CLINICA' || formIntervencion.resolucion === 'ALTA_EN_CLINICA') && (
+                  <SelectorClinicaDestino
+                    clinicas={clinicasDelEvento}
+                    clinicaDestinoId={formIntervencion.clinicaDestinoId}
+                    onSelectClinica={(idClinica) => setFormIntervencion((p) => ({ ...p, clinicaDestinoId: idClinica }))}
+                    textoFallback={formIntervencion.hospitalDestino}
+                    onChangeTexto={(v) => setFormIntervencion((p) => ({ ...p, hospitalDestino: v }))}
+                  />
+                )}
               </div>
             </div>
 
@@ -1436,7 +1424,7 @@ function UCOContent() {
               <button
                 onClick={handleRegistrarIntervencion}
                 disabled={registrando}
-                className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-md transition-colors"
+                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-md transition-colors"
               >
                 {registrando ? 'Registrando...' : 'Registrar intervención'}
               </button>
@@ -1452,8 +1440,8 @@ function UCOContent() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-slate-900">
                 Editar intervención #{modalEditar.numeroIntervencion}
-                <span className={`ml-3 text-xs px-2 py-0.5 rounded-full font-medium ${modalEditar.abierta ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
-                  {modalEditar.abierta ? 'En curso' : 'Cerrada'}
+                <span className={`ml-3 text-xs px-2 py-0.5 rounded-full font-medium ${ESTADO_INTERV_STYLES[modalEditar.estado]}`}>
+                  {ESTADO_INTERV_LABEL[modalEditar.estado]}
                 </span>
               </h2>
             </div>
