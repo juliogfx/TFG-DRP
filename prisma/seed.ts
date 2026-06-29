@@ -10,7 +10,7 @@
  * Ejecutar con: npx prisma db seed
  * (requiere "prisma.seed" configurado en package.json)
  *
- * Actualizado para schema v4.3.
+ * Actualizado para schema v4.6.
  */
 
 import 'dotenv/config';
@@ -37,7 +37,7 @@ const prisma = new PrismaClient({ adapter });
  * 6. Walkies y Material (sin deps — antes de Eventos)
  */
 async function main() {
-  console.log('🌱 Iniciando seed TFG-DRP v4.3...');
+  console.log('🌱 Iniciando seed TFG-DRP v4.6...');
 
   const [bernabeu, metropolitano, wizink] = await Promise.all([
     prisma.ubicacion.upsert({

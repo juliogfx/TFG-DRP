@@ -102,7 +102,7 @@ export default function HomePage() {
           </div>
           <div>
             <p className="font-medium text-slate-700">Base de datos</p>
-            <p>Supabase (eu-west-1) · Schema v4.3</p>
+            <p>Supabase (eu-west-1) · Schema v4.6</p>
           </div>
           <div>
             <p className="font-medium text-slate-700">Versión</p>

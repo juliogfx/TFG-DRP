@@ -10,7 +10,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import type { PosicionListItem, ZonaPosicion } from '@/types/posicion';
 
@@ -32,7 +32,6 @@ const FORM_INICIAL = {
 };
 
 export default function PosicionesEventoPage() {
-  const router = useRouter();
   const params = useParams<{ id: string }>();
   const eventoId = Number(params.id);
 

@@ -5,12 +5,12 @@
  * select de puesto al crear/editar una posición.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_request: NextRequest): Promise<NextResponse> {
+export async function GET(): Promise<NextResponse> {
   try {
     const puestos = await prisma.puesto.findMany({
       select: { id: true, nombre: true, requiereVehiculo: true },

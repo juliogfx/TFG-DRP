@@ -1,7 +1,13 @@
 // =============================================================================
-// schema.prisma — TFG-DRP  v4.2
+// schema.prisma — TFG-DRP  v4.6
 // Sistema de Gestión de Dispositivos de Riesgos Previsibles
 // Stack: Next.js 14 + TypeScript + Prisma 7 + Supabase (PostgreSQL)
+//
+// CHANGELOG v4.6 (29-jun-2026):
+//   + Intervencion: estado (EstadoIntervencion), uco, sector, resolucion (ResolucionIntervencion), dotacionActivaId nullable
+//   + EstadoDotacion: CL0-CL6 (sustituye DISPONIBLE/EN_INTERVENCION/NO_OPERATIVA)
+//   + Posicion: zona, componentesMinimo, componentesMaximo (rename desde capacidadPersonas)
+//   + Dotacion: controlMaterial (JSONB) — F1.7 control de material por evento
 //
 // CHANGELOG v4.2 (09-may-2026):
 //   + Tabla EquipoCatalogo — catálogo de equipos deportivos
