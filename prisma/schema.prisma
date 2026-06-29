@@ -69,6 +69,19 @@ enum EstadoWalkie {
   BAJA
 }
 
+enum EstadoIntervencion {
+  PENDIENTE_DOTACION
+  EN_CURSO
+  CERRADA
+}
+
+enum ResolucionIntervencion {
+  ALTA_EN_LUGAR
+  TRASLADO_CLINICA
+  ALTA_EN_CLINICA
+  TRASLADO_HOSPITALARIO
+}
+
 enum TipoMaterial {
   CONSUMIBLE
   REUTILIZABLE
@@ -513,33 +526,37 @@ model AsignacionPersonalDotacion {
 // =============================================================================
 
 model Intervencion {
-  id                  Int                  @id @default(autoincrement())
-  eventoId            Int                  @map("evento_id")
-  numeroIntervencion  Int                  @map("numero_intervencion")
-  horaAviso           DateTime?            @map("hora_aviso")
-  horaLlegada         DateTime?            @map("hora_llegada")
-  horaFinal           DateTime?            @map("hora_final")
-  dotacionActivaId    Int                  @map("dotacion_activa_id")
-  dotacionApoyoId     Int?                 @map("dotacion_apoyo_id")
-  sintomatologiaId    Int                  @map("sintomatologia_id")
-  gravedad            GravedadIntervencion @default(LEVE)
-  lugar               String?              @db.VarChar(100)
-  altaEnLugar         Boolean              @default(false) @map("alta_en_lugar")
-  trasladoClinica     Boolean              @default(false) @map("traslado_clinica")
-  clinicaDestinoId    Int?                 @map("clinica_destino_id")
-  altaEnClinica       Boolean              @default(false) @map("alta_en_clinica")
-  trasladoHospital    Boolean              @default(false) @map("traslado_hospital")
-  hospitalDestino     String?              @map("hospital_destino") @db.VarChar(150)
-  dotacionTrasladoId  Int?                 @map("dotacion_traslado_id")
-  usuarioUcoId        Int?                 @map("usuario_uco_id")
-  observaciones       String?              @db.Text
-  parte               String?              @db.VarChar(50)
-  createdAt           DateTime             @default(now()) @map("created_at")
-  updatedAt           DateTime             @updatedAt @map("updated_at")
+  id                  Int                     @id @default(autoincrement())
+  eventoId            Int                     @map("evento_id")
+  numeroIntervencion  Int                     @map("numero_intervencion")
+  horaAviso           DateTime?               @map("hora_aviso")
+  horaLlegada         DateTime?               @map("hora_llegada")
+  horaFinal           DateTime?               @map("hora_final")
+  dotacionActivaId    Int?                    @map("dotacion_activa_id")
+  dotacionApoyoId     Int?                    @map("dotacion_apoyo_id")
+  sintomatologiaId    Int                     @map("sintomatologia_id")
+  gravedad            GravedadIntervencion    @default(LEVE)
+  estado              EstadoIntervencion      @default(PENDIENTE_DOTACION)
+  uco                 String                  @default("UCO1") @db.VarChar(10)
+  sector              String?                 @db.VarChar(100)
+  resolucion          ResolucionIntervencion?
+  lugar               String?                 @db.VarChar(100)
+  altaEnLugar         Boolean                 @default(false) @map("alta_en_lugar")
+  trasladoClinica     Boolean                 @default(false) @map("traslado_clinica")
+  clinicaDestinoId    Int?                    @map("clinica_destino_id")
+  altaEnClinica       Boolean                 @default(false) @map("alta_en_clinica")
+  trasladoHospital    Boolean                 @default(false) @map("traslado_hospital")
+  hospitalDestino     String?                 @map("hospital_destino") @db.VarChar(150)
+  dotacionTrasladoId  Int?                    @map("dotacion_traslado_id")
+  usuarioUcoId        Int?                    @map("usuario_uco_id")
+  observaciones       String?                 @db.Text
+  parte               String?                 @db.VarChar(50)
+  createdAt           DateTime                @default(now()) @map("created_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
 
   evento           Evento           @relation(fields: [eventoId], references: [id])
   sintomatologia   Sintomatologia   @relation(fields: [sintomatologiaId], references: [id])
-  dotacionActiva   Dotacion         @relation("DotacionActiva", fields: [dotacionActivaId], references: [id])
+  dotacionActiva   Dotacion?        @relation("DotacionActiva", fields: [dotacionActivaId], references: [id])
   dotacionApoyo    Dotacion?        @relation("DotacionApoyo", fields: [dotacionApoyoId], references: [id])
   dotacionTraslado Dotacion?        @relation("DotacionTraslado", fields: [dotacionTrasladoId], references: [id])
   clinicaDestino   Posicion?        @relation("ClinicaDestino", fields: [clinicaDestinoId], references: [id])

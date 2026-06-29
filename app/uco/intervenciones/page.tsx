@@ -8,6 +8,8 @@ import type {
   CreateIntervencionInput,
   UpdateIntervencionInput,
   GravedadIntervencion,
+  EstadoIntervencion,
+  ResolucionIntervencion,
   SintomatologiaItem,
 } from '@/types/intervencion';
 import type { DotacionListItem } from '@/types/dotacion';
@@ -27,10 +29,32 @@ const GRAVEDAD_STYLES: Record<string, string> = {
   CRITICA:  'bg-red-100 text-red-700',
 };
 
+const ESTADO_STYLES: Record<EstadoIntervencion, string> = {
+  PENDIENTE_DOTACION: 'bg-orange-100 text-orange-700',
+  EN_CURSO:           'bg-blue-100 text-blue-700',
+  CERRADA:            'bg-slate-100 text-slate-600',
+};
+
+const ESTADO_LABEL: Record<EstadoIntervencion, string> = {
+  PENDIENTE_DOTACION: 'Pend. dot.',
+  EN_CURSO:           'En curso',
+  CERRADA:            'Cerrada',
+};
+
+const RESOLUCION_LABEL: Record<ResolucionIntervencion, string> = {
+  ALTA_EN_LUGAR:         'Alta en el lugar',
+  TRASLADO_CLINICA:      'Traslado a clínica',
+  ALTA_EN_CLINICA:       'Alta en clínica',
+  TRASLADO_HOSPITALARIO: 'Traslado hospitalario',
+};
+
 const FORM_INICIAL = {
   dotacionActivaId: '' as number | '',
   sintomatologiaId: '' as number | '',
   gravedad: 'LEVE' as GravedadIntervencion,
+  uco: 'UCO1',
+  sector: '',
+  lugar: '',
   horaAviso: '',
   dotacionApoyoId: '' as number | '',
   altaEnLugar: false,
@@ -187,16 +211,18 @@ function IntervencionesContent() {
     const i = intervenciones.find((x) => x.id === objetivoId);
     if (i) {
       setFormEditar({
-        dotacionActivaId: i.dotacionActiva.id,
+        dotacionActivaId: i.dotacionActiva?.id ?? null,
         sintomatologiaId: i.sintomatologia?.id,
         gravedad: i.gravedad,
+        uco: i.uco,
+        sector: i.sector,
+        lugar: i.lugar,
+        resolucion: i.resolucion,
+        parte: i.parte,
         horaAviso: i.horaAviso,
         horaLlegada: i.horaLlegada,
         horaFinal: i.horaFinal,
         dotacionApoyoId: i.dotacionApoyo?.id ?? null,
-        altaEnLugar: i.altaEnLugar,
-        trasladoClinica: i.trasladoClinica,
-        trasladoHospital: i.trasladoHospital,
         hospitalDestino: i.hospitalDestino,
       });
       setModalIntervencion({ intervencion: i, modo: 'editar' });
@@ -221,16 +247,18 @@ function IntervencionesContent() {
 
   async function handleRegistrar() {
     setErrorNueva(null);
-    if (!formNueva.dotacionActivaId) return setErrorNueva('Selecciona la dotación activada.');
     if (!formNueva.sintomatologiaId) return setErrorNueva('Selecciona la sintomatología.');
     if (!eventoId) return;
     setRegistrando(true);
     try {
       const body: CreateIntervencionInput = {
         eventoId,
-        dotacionActivaId: Number(formNueva.dotacionActivaId),
+        dotacionActivaId: formNueva.dotacionActivaId ? Number(formNueva.dotacionActivaId) : null,
         sintomatologiaId: Number(formNueva.sintomatologiaId),
         gravedad: formNueva.gravedad,
+        uco: formNueva.uco,
+        sector: formNueva.sector.trim() || null,
+        lugar: formNueva.lugar.trim() || null,
         horaAviso: formNueva.horaAviso || undefined,
         dotacionApoyoId: formNueva.dotacionApoyoId ? Number(formNueva.dotacionApoyoId) : undefined,
         altaEnLugar: formNueva.altaEnLugar,
@@ -264,16 +292,18 @@ function IntervencionesContent() {
     if (!modalIntervencion) return;
     const i = modalIntervencion.intervencion;
     setFormEditar({
-      dotacionActivaId: i.dotacionActiva.id,
+      dotacionActivaId: i.dotacionActiva?.id ?? null,
       sintomatologiaId: i.sintomatologia?.id,
       gravedad: i.gravedad,
+      uco: i.uco,
+      sector: i.sector,
+      lugar: i.lugar,
+      resolucion: i.resolucion,
+      parte: i.parte,
       horaAviso: i.horaAviso,
       horaLlegada: i.horaLlegada,
       horaFinal: i.horaFinal,
       dotacionApoyoId: i.dotacionApoyo?.id ?? null,
-      altaEnLugar: i.altaEnLugar,
-      trasladoClinica: i.trasladoClinica,
-      trasladoHospital: i.trasladoHospital,
       hospitalDestino: i.hospitalDestino,
     });
     setModalIntervencion({ ...modalIntervencion, modo: 'editar' });
@@ -282,6 +312,17 @@ function IntervencionesContent() {
   async function handleGuardar() {
     if (!modalIntervencion) return;
     setErrorEditar(null);
+
+    // Validación local: para cerrar (horaFinal) se exige parte + resolución.
+    if (formEditar.horaFinal) {
+      if (!formEditar.parte || formEditar.parte.trim() === '') {
+        return setErrorEditar('Para registrar la hora final hay que seleccionar el parte (dotación que rellena el parte).');
+      }
+      if (!formEditar.resolucion) {
+        return setErrorEditar('Para registrar la hora final hay que indicar la resolución.');
+      }
+    }
+
     setGuardando(true);
     try {
       const res = await fetch(`/api/intervenciones/${modalIntervencion.intervencion.id}`, {
@@ -312,7 +353,7 @@ function IntervencionesContent() {
   const filtradas = intervenciones.filter((i) => {
     if (filtroEstado === 'EN_CURSO' && !i.abierta) return false;
     if (filtroEstado === 'CERRADAS' && i.abierta) return false;
-    if (filtroDotacion && i.dotacionActiva.id !== Number(filtroDotacion)) return false;
+    if (filtroDotacion && i.dotacionActiva?.id !== Number(filtroDotacion)) return false;
     if (filtroGravedad !== 'TODAS' && i.gravedad !== filtroGravedad) return false;
     if (filtroResolucion === 'alta' && !i.altaEnLugar) return false;
     if (filtroResolucion === 'clinica' && !i.trasladoClinica) return false;
@@ -520,9 +561,10 @@ function IntervencionesContent() {
                 <tbody className="divide-y divide-slate-100">
                   {filtradas.map((i) => {
                     const sintomatologia = i.sintomatologia?.tipo ?? '—';
-                    const resolucion = i.altaEnLugar ? 'Alta en lugar'
-                      : i.trasladoClinica ? 'Clínica'
-                      : i.trasladoHospital ? `Hospital${i.hospitalDestino ? ` · ${i.hospitalDestino}` : ''}`
+                    const resolucion = i.resolucion
+                      ? (i.resolucion === 'TRASLADO_HOSPITALARIO' && i.hospitalDestino
+                          ? `${RESOLUCION_LABEL[i.resolucion]} · ${i.hospitalDestino}`
+                          : RESOLUCION_LABEL[i.resolucion])
                       : '—';
                     return (
                     <tr
@@ -532,12 +574,12 @@ function IntervencionesContent() {
                     >
                       <td className="px-3 py-2 font-mono font-bold text-slate-900 truncate">#{i.numeroIntervencion}</td>
                       <td className="px-3 py-2 truncate">
-                        <span className={`px-2 py-0.5 rounded-full font-medium text-xs ${i.abierta ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
-                          {i.abierta ? 'En curso' : 'Cerrada'}
+                        <span className={`px-2 py-0.5 rounded-full font-medium text-xs ${ESTADO_STYLES[i.estado]}`}>
+                          {ESTADO_LABEL[i.estado]}
                         </span>
                       </td>
                       <td className="px-3 py-2 font-mono text-slate-700 truncate">
-                        {i.dotacionActiva.codigo}
+                        {i.dotacionActiva?.codigo ?? '—'}
                         {i.dotacionApoyo && <span className="text-slate-400"> +{i.dotacionApoyo.codigo}</span>}
                       </td>
                       <td className="px-3 py-2 text-slate-600 truncate" title={sintomatologia}>{sintomatologia}</td>
@@ -555,16 +597,18 @@ function IntervencionesContent() {
                           onClick={(e) => {
                             e.stopPropagation();
                             setFormEditar({
-                              dotacionActivaId: i.dotacionActiva.id,
+                              dotacionActivaId: i.dotacionActiva?.id ?? null,
                               sintomatologiaId: i.sintomatologia?.id,
                               gravedad: i.gravedad,
+                              uco: i.uco,
+                              sector: i.sector,
+                              lugar: i.lugar,
+                              resolucion: i.resolucion,
+                              parte: i.parte,
                               horaAviso: i.horaAviso,
                               horaLlegada: i.horaLlegada,
                               horaFinal: i.horaFinal,
                               dotacionApoyoId: i.dotacionApoyo?.id ?? null,
-                              altaEnLugar: i.altaEnLugar,
-                              trasladoClinica: i.trasladoClinica,
-                              trasladoHospital: i.trasladoHospital,
                               hospitalDestino: i.hospitalDestino,
                             });
                             setModalIntervencion({ intervencion: i, modo: 'editar' });
@@ -593,14 +637,47 @@ function IntervencionesContent() {
             {errorNueva && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-md text-sm mb-4">{errorNueva}</div>}
 
             <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">UCO *</label>
+                  <select
+                    value={formNueva.uco}
+                    onChange={(e) => setFormNueva((p) => ({ ...p, uco: e.target.value }))}
+                    className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  >
+                    <option value="UCO1">UCO1</option>
+                    <option value="UCO2">UCO2</option>
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Sector</label>
+                  <input
+                    type="text"
+                    value={formNueva.sector}
+                    onChange={(e) => setFormNueva((p) => ({ ...p, sector: e.target.value }))}
+                    placeholder="Ej: Sector A, Gol Sur, Acceso Norte..."
+                    className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
+              </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Dotación activada *</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Lugar</label>
+                <input
+                  type="text"
+                  value={formNueva.lugar}
+                  onChange={(e) => setFormNueva((p) => ({ ...p, lugar: e.target.value }))}
+                  placeholder="Ej: Puerta 7, Fila 3 Asiento 12..."
+                  className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Dotación activada</label>
                 <select
                   value={formNueva.dotacionActivaId}
                   onChange={(e) => setFormNueva((p) => ({ ...p, dotacionActivaId: Number(e.target.value) || '' }))}
                   className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
-                  <option value="">Seleccionar dotación...</option>
+                  <option value="">Sin asignar (Pendiente dotación)</option>
                   {dotaciones.map((d) => (
                     <option key={d.id} value={d.id}>{d.codigo} — {TIPO_LABELS[d.tipo] ?? d.tipo}</option>
                   ))}
@@ -693,8 +770,8 @@ function IntervencionesContent() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-slate-900">
                 Intervención #{modalIntervencion.intervencion.numeroIntervencion}
-                <span className={`ml-3 text-xs px-2 py-0.5 rounded-full font-medium ${modalIntervencion.intervencion.abierta ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
-                  {modalIntervencion.intervencion.abierta ? 'En curso' : 'Cerrada'}
+                <span className={`ml-3 text-xs px-2 py-0.5 rounded-full font-medium ${ESTADO_STYLES[modalIntervencion.intervencion.estado]}`}>
+                  {ESTADO_LABEL[modalIntervencion.intervencion.estado]}
                 </span>
               </h2>
             </div>
@@ -703,7 +780,14 @@ function IntervencionesContent() {
 
             {modalIntervencion.modo === 'ver' ? (
               <div className="space-y-3 text-sm">
-                <div><span className="text-slate-500">Dotación activada:</span> <span className="font-mono">{modalIntervencion.intervencion.dotacionActiva.codigo}</span></div>
+                <div><span className="text-slate-500">UCO:</span> {modalIntervencion.intervencion.uco}</div>
+                {modalIntervencion.intervencion.sector && (
+                  <div><span className="text-slate-500">Sector:</span> {modalIntervencion.intervencion.sector}</div>
+                )}
+                {modalIntervencion.intervencion.lugar && (
+                  <div><span className="text-slate-500">Lugar:</span> {modalIntervencion.intervencion.lugar}</div>
+                )}
+                <div><span className="text-slate-500">Dotación activada:</span> <span className="font-mono">{modalIntervencion.intervencion.dotacionActiva?.codigo ?? '—'}</span></div>
                 {modalIntervencion.intervencion.dotacionApoyo && (
                   <div><span className="text-slate-500">Dotación de apoyo:</span> <span className="font-mono">{modalIntervencion.intervencion.dotacionApoyo.codigo}</span></div>
                 )}
@@ -719,20 +803,49 @@ function IntervencionesContent() {
                 <div><span className="text-slate-500">Hora final:</span> {formatearHora(modalIntervencion.intervencion.horaFinal)}</div>
                 <div>
                   <span className="text-slate-500">Resolución:</span>{' '}
-                  {modalIntervencion.intervencion.altaEnLugar ? 'Alta en lugar'
-                    : modalIntervencion.intervencion.trasladoClinica ? 'Traslado a clínica'
-                    : modalIntervencion.intervencion.trasladoHospital
-                      ? `Traslado hospitalario${modalIntervencion.intervencion.hospitalDestino ? ` · ${modalIntervencion.intervencion.hospitalDestino}` : ''}`
-                      : 'Sin definir'}
+                  {modalIntervencion.intervencion.resolucion
+                    ? (modalIntervencion.intervencion.resolucion === 'TRASLADO_HOSPITALARIO' && modalIntervencion.intervencion.hospitalDestino
+                        ? `${RESOLUCION_LABEL[modalIntervencion.intervencion.resolucion]} · ${modalIntervencion.intervencion.hospitalDestino}`
+                        : RESOLUCION_LABEL[modalIntervencion.intervencion.resolucion])
+                    : 'Sin definir'}
                 </div>
+                {modalIntervencion.intervencion.parte && (
+                  <div><span className="text-slate-500">Parte:</span> {modalIntervencion.intervencion.parte}</div>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">UCO</label>
+                    <select value={formEditar.uco ?? 'UCO1'}
+                      onChange={(e) => setFormEditar((p) => ({ ...p, uco: e.target.value }))}
+                      className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+                      <option value="UCO1">UCO1</option>
+                      <option value="UCO2">UCO2</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Sector</label>
+                    <input type="text" value={formEditar.sector ?? ''}
+                      onChange={(e) => setFormEditar((p) => ({ ...p, sector: e.target.value || null }))}
+                      placeholder="Ej: Sector A, Gol Sur..."
+                      className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Lugar</label>
+                  <input type="text" value={formEditar.lugar ?? ''}
+                    onChange={(e) => setFormEditar((p) => ({ ...p, lugar: e.target.value || null }))}
+                    placeholder="Ej: Puerta 7, Fila 3 Asiento 12..."
+                    className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Dotación activada</label>
                   <select value={formEditar.dotacionActivaId ?? ''}
-                    onChange={(e) => setFormEditar((p) => ({ ...p, dotacionActivaId: Number(e.target.value) || undefined }))}
+                    onChange={(e) => setFormEditar((p) => ({ ...p, dotacionActivaId: e.target.value ? Number(e.target.value) : null }))}
                     className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+                    <option value="">Sin asignar</option>
                     {dotaciones.map((d) => <option key={d.id} value={d.id}>{d.codigo} — {TIPO_LABELS[d.tipo] ?? d.tipo}</option>)}
                   </select>
                 </div>
@@ -774,7 +887,7 @@ function IntervencionesContent() {
                     onChange={(v) => setFormEditar((p) => ({ ...p, horaFinal: v }))}
                   />
                 </div>
-                <p className="text-xs text-slate-400 -mt-2">Al rellenar &quot;Hora final&quot;, la intervención pasa a estado cerrada.</p>
+                <p className="text-xs text-slate-400 -mt-2">Para registrar &quot;Hora final&quot; deben estar definidos &quot;Parte&quot; y &quot;Resolución&quot;.</p>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Dotación de apoyo</label>
                   <select value={formEditar.dotacionApoyoId ?? ''}
@@ -787,29 +900,42 @@ function IntervencionesContent() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Resolución</label>
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                      <input type="checkbox" checked={!!formEditar.altaEnLugar}
-                        onChange={(e) => setFormEditar((p) => ({ ...p, altaEnLugar: e.target.checked, trasladoClinica: e.target.checked ? false : p.trasladoClinica, trasladoHospital: e.target.checked ? false : p.trasladoHospital }))} />
-                      Alta en el lugar
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                      <input type="checkbox" checked={!!formEditar.trasladoClinica}
-                        onChange={(e) => setFormEditar((p) => ({ ...p, trasladoClinica: e.target.checked, altaEnLugar: e.target.checked ? false : p.altaEnLugar, trasladoHospital: e.target.checked ? false : p.trasladoHospital }))} />
-                      Traslado a clínica
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                      <input type="checkbox" checked={!!formEditar.trasladoHospital}
-                        onChange={(e) => setFormEditar((p) => ({ ...p, trasladoHospital: e.target.checked, altaEnLugar: e.target.checked ? false : p.altaEnLugar, trasladoClinica: e.target.checked ? false : p.trasladoClinica }))} />
-                      Traslado hospitalario
-                    </label>
-                    {formEditar.trasladoHospital && (
-                      <input type="text" placeholder="Centro hospitalario de destino" value={formEditar.hospitalDestino ?? ''}
-                        onChange={(e) => setFormEditar((p) => ({ ...p, hospitalDestino: e.target.value || null }))}
-                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm ml-6" />
-                    )}
-                  </div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Resolución {formEditar.horaFinal && <span className="text-red-600">*</span>}
+                  </label>
+                  <select value={formEditar.resolucion ?? ''}
+                    onChange={(e) => setFormEditar((p) => ({ ...p, resolucion: (e.target.value || null) as ResolucionIntervencion | null }))}
+                    className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+                    <option value="">Sin definir</option>
+                    <option value="ALTA_EN_LUGAR">Alta en el lugar</option>
+                    <option value="TRASLADO_CLINICA">Traslado a clínica</option>
+                    <option value="ALTA_EN_CLINICA">Alta en clínica</option>
+                    <option value="TRASLADO_HOSPITALARIO">Traslado hospitalario</option>
+                  </select>
+                  {formEditar.resolucion === 'TRASLADO_HOSPITALARIO' && (
+                    <input type="text" placeholder="Centro hospitalario de destino" value={formEditar.hospitalDestino ?? ''}
+                      onChange={(e) => setFormEditar((p) => ({ ...p, hospitalDestino: e.target.value || null }))}
+                      className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm mt-2" />
+                  )}
+                  {formEditar.horaFinal && !formEditar.resolucion && (
+                    <p className="text-xs text-red-600 mt-1">La resolución es obligatoria para cerrar la intervención.</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Parte {formEditar.horaFinal && <span className="text-red-600">*</span>}
+                  </label>
+                  <select value={formEditar.parte ?? ''}
+                    onChange={(e) => setFormEditar((p) => ({ ...p, parte: e.target.value || null }))}
+                    className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+                    <option value="">Seleccionar dotación que rellena el parte</option>
+                    {dotaciones.map((d) => (
+                      <option key={d.id} value={d.codigo}>{d.codigo} — {TIPO_LABELS[d.tipo] ?? d.tipo}</option>
+                    ))}
+                  </select>
+                  {formEditar.horaFinal && !formEditar.parte && (
+                    <p className="text-xs text-red-600 mt-1">El parte es obligatorio para cerrar la intervención.</p>
+                  )}
                 </div>
               </div>
             )}

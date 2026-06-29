@@ -25,6 +25,23 @@ export async function PUT(
   if (!id) return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
   try {
     const body = await request.json() as UpdateIntervencionInput;
+
+    // Cierre de intervención: si llega horaFinal hay que tener parte y resolución.
+    if (body.horaFinal !== undefined && body.horaFinal !== null) {
+      if (!body.parte || body.parte.trim() === '') {
+        return NextResponse.json(
+          { error: 'Para registrar la hora final es obligatorio indicar el parte (dotación que rellena el parte).' },
+          { status: 400 }
+        );
+      }
+      if (!body.resolucion) {
+        return NextResponse.json(
+          { error: 'Para registrar la hora final es obligatorio indicar la resolución.' },
+          { status: 400 }
+        );
+      }
+    }
+
     const intervencion = await updateIntervencion(id, body);
     return NextResponse.json({ data: intervencion }, { status: 200 });
   } catch (error) {

@@ -10,6 +10,8 @@ import type {
   UpdateIntervencionInput,
   SintomatologiaItem,
   GravedadIntervencion,
+  EstadoIntervencion,
+  ResolucionIntervencion,
 } from '@/types/intervencion';
 
 const intervencionSelect = {
@@ -19,8 +21,15 @@ const intervencionSelect = {
   horaLlegada: true,
   horaFinal: true,
   gravedad: true,
+  estado: true,
+  uco: true,
+  sector: true,
+  lugar: true,
+  resolucion: true,
+  parte: true,
   altaEnLugar: true,
   trasladoClinica: true,
+  altaEnClinica: true,
   trasladoHospital: true,
   hospitalDestino: true,
   sintomatologia: { select: { id: true, tipo: true } },
@@ -36,12 +45,19 @@ function serializarIntervencion(i: {
   horaLlegada: Date | null;
   horaFinal: Date | null;
   gravedad: string;
+  estado: string;
+  uco: string;
+  sector: string | null;
+  lugar: string | null;
+  resolucion: string | null;
+  parte: string | null;
   altaEnLugar: boolean;
   trasladoClinica: boolean;
+  altaEnClinica: boolean;
   trasladoHospital: boolean;
   hospitalDestino: string | null;
   sintomatologia: { id: number; tipo: string } | null;
-  dotacionActiva: { id: number; codigo: string; tipo: string };
+  dotacionActiva: { id: number; codigo: string; tipo: string } | null;
   dotacionApoyo: { id: number; codigo: string } | null;
   dotacionTraslado: { id: number; codigo: string } | null;
 }): IntervencionListItem {
@@ -52,8 +68,15 @@ function serializarIntervencion(i: {
     horaLlegada: i.horaLlegada?.toISOString() ?? null,
     horaFinal: i.horaFinal?.toISOString() ?? null,
     gravedad: i.gravedad as GravedadIntervencion,
+    estado: i.estado as EstadoIntervencion,
+    uco: i.uco,
+    sector: i.sector,
+    lugar: i.lugar,
+    resolucion: (i.resolucion as ResolucionIntervencion | null) ?? null,
+    parte: i.parte,
     altaEnLugar: i.altaEnLugar,
     trasladoClinica: i.trasladoClinica,
+    altaEnClinica: i.altaEnClinica,
     trasladoHospital: i.trasladoHospital,
     hospitalDestino: i.hospitalDestino,
     sintomatologia: i.sintomatologia,
@@ -89,13 +112,37 @@ export async function getIntervencionesByEvento(
 }
 
 /**
+ * Mapea ResolucionIntervencion al campo Boolean correspondiente para
+ * mantener compatibilidad con la columna histórica.
+ */
+function flagsDesdeResolucion(r: ResolucionIntervencion | null | undefined): {
+  altaEnLugar?: boolean;
+  trasladoClinica?: boolean;
+  altaEnClinica?: boolean;
+  trasladoHospital?: boolean;
+} {
+  if (!r) return {};
+  return {
+    altaEnLugar: r === 'ALTA_EN_LUGAR',
+    trasladoClinica: r === 'TRASLADO_CLINICA',
+    altaEnClinica: r === 'ALTA_EN_CLINICA',
+    trasladoHospital: r === 'TRASLADO_HOSPITALARIO',
+  };
+}
+
+/**
  * Crea una nueva intervención calculando numeroIntervencion automáticamente
  * como MAX(numeroIntervencion) + 1 para ese eventoId, o 1 si es la primera.
  * Usa transacción para garantizar atomicidad del contador.
+ *
+ * Estado inicial:
+ *   - PENDIENTE_DOTACION si no se pasa dotacionActivaId
+ *   - EN_CURSO si se pasa dotacionActivaId
  */
 export async function createIntervencion(
   input: CreateIntervencionInput
 ): Promise<IntervencionListItem> {
+  const estadoInicial: EstadoIntervencion = input.dotacionActivaId ? 'EN_CURSO' : 'PENDIENTE_DOTACION';
   const intervencion = await prisma.$transaction(async (tx) => {
     const ultima = await tx.intervencion.findFirst({
       where: { eventoId: input.eventoId },
@@ -108,9 +155,13 @@ export async function createIntervencion(
       data: {
         eventoId: input.eventoId,
         numeroIntervencion,
-        dotacionActivaId: input.dotacionActivaId,
+        dotacionActivaId: input.dotacionActivaId ?? null,
         sintomatologiaId: input.sintomatologiaId,
         gravedad: input.gravedad,
+        estado: estadoInicial,
+        uco: input.uco ?? 'UCO1',
+        sector: input.sector ?? null,
+        lugar: input.lugar ?? null,
         horaAviso: input.horaAviso ? new Date(input.horaAviso) : null,
         horaLlegada: input.horaLlegada ? new Date(input.horaLlegada) : null,
         horaFinal: input.horaFinal ? new Date(input.horaFinal) : null,
@@ -141,20 +192,54 @@ export async function getSintomatologias(): Promise<SintomatologiaItem[]> {
 /**
  * Actualiza los campos de una intervención existente.
  * Todos los campos son opcionales (PATCH semántico).
- * @param id - ID de la intervención a actualizar.
- * @param input - Campos a actualizar.
- * @returns La intervención actualizada serializada.
+ *
+ * Lógica de estado:
+ *   - Si llega resolucion + horaFinal → estado = CERRADA
+ *   - Si llega dotacionActivaId y el estado actual es PENDIENTE_DOTACION → EN_CURSO
+ *
+ * Al cerrar, los Boolean altaEnLugar/trasladoClinica/altaEnClinica/trasladoHospital
+ * se actualizan en función de `resolucion` para mantener compatibilidad.
  */
 export async function updateIntervencion(
   id: number,
   input: UpdateIntervencionInput
 ): Promise<IntervencionListItem> {
+  const actual = await prisma.intervencion.findUnique({
+    where: { id },
+    select: { estado: true, dotacionActivaId: true },
+  });
+  if (!actual) {
+    const err: Error & { code?: string } = new Error(`No existe intervención con id ${id}`);
+    err.code = 'P2025';
+    throw err;
+  }
+
+  const cerrando = input.resolucion !== undefined && input.resolucion !== null && input.horaFinal;
+  const asignandoDotacion =
+    input.dotacionActivaId !== undefined &&
+    input.dotacionActivaId !== null &&
+    actual.dotacionActivaId === null;
+
+  let estadoCalculado: EstadoIntervencion | undefined;
+  if (cerrando) {
+    estadoCalculado = 'CERRADA';
+  } else if (asignandoDotacion && actual.estado === 'PENDIENTE_DOTACION') {
+    estadoCalculado = 'EN_CURSO';
+  }
+
+  const flagsResolucion = input.resolucion !== undefined ? flagsDesdeResolucion(input.resolucion) : {};
+
   const intervencion = await prisma.intervencion.update({
     where: { id },
     data: {
       ...(input.dotacionActivaId !== undefined && { dotacionActivaId: input.dotacionActivaId }),
       ...(input.sintomatologiaId !== undefined && { sintomatologiaId: input.sintomatologiaId }),
       ...(input.gravedad !== undefined && { gravedad: input.gravedad }),
+      ...(input.uco !== undefined && { uco: input.uco }),
+      ...(input.sector !== undefined && { sector: input.sector }),
+      ...(input.lugar !== undefined && { lugar: input.lugar }),
+      ...(input.resolucion !== undefined && { resolucion: input.resolucion }),
+      ...(input.parte !== undefined && { parte: input.parte }),
       ...(input.horaAviso !== undefined && {
         horaAviso: input.horaAviso ? new Date(input.horaAviso) : null,
       }),
@@ -165,12 +250,15 @@ export async function updateIntervencion(
         horaFinal: input.horaFinal ? new Date(input.horaFinal) : null,
       }),
       ...(input.dotacionApoyoId !== undefined && { dotacionApoyoId: input.dotacionApoyoId }),
+      ...flagsResolucion,
       ...(input.altaEnLugar !== undefined && { altaEnLugar: input.altaEnLugar }),
       ...(input.trasladoClinica !== undefined && { trasladoClinica: input.trasladoClinica }),
+      ...(input.altaEnClinica !== undefined && { altaEnClinica: input.altaEnClinica }),
       ...(input.trasladoHospital !== undefined && { trasladoHospital: input.trasladoHospital }),
       ...(input.hospitalDestino !== undefined && { hospitalDestino: input.hospitalDestino }),
       ...(input.dotacionTrasladoId !== undefined && { dotacionTrasladoId: input.dotacionTrasladoId }),
       ...(input.observaciones !== undefined && { observaciones: input.observaciones }),
+      ...(estadoCalculado && { estado: estadoCalculado }),
     },
     select: intervencionSelect,
   });

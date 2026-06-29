@@ -47,9 +47,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json() as CreateIntervencionInput;
-    if (!body.eventoId || !body.dotacionActivaId || !body.sintomatologiaId || !body.gravedad) {
+    // dotacionActivaId es opcional: si no viene, la intervención queda en
+    // estado PENDIENTE_DOTACION.
+    if (!body.eventoId || !body.sintomatologiaId || !body.gravedad) {
       return NextResponse.json(
-        { error: 'Faltan campos obligatorios: eventoId, dotacionActivaId, sintomatologiaId, gravedad' },
+        { error: 'Faltan campos obligatorios: eventoId, sintomatologiaId, gravedad' },
         { status: 400 }
       );
     }
