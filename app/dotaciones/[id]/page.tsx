@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
 import type {
   DotacionDetalle,
   PersonaListItem,
@@ -80,7 +81,6 @@ export default function DotacionDetallePage() {
   const [errorAsignacion, setErrorAsignacion] = useState<string | null>(null);
   const [cambiandoEstado, setCambiandoEstado] = useState(false);
   const [desasignando, setDesasignando] = useState<number | null>(null);
-  const [actualizandoAsistencia, setActualizandoAsistencia] = useState<number | null>(null);
   const [catalogoMaterial, setCatalogoMaterial] = useState<MaterialItem[]>([]);
   const [walkiesDisponibles, setWalkiesDisponibles] = useState<WalkieItem[]>([]);
   const [materialSeleccionado, setMaterialSeleccionado] = useState<number | ''>('');
@@ -232,36 +232,9 @@ export default function DotacionDetallePage() {
     }
   }
 
-  async function handleToggleAsistencia(personaId: number, asistoActual: boolean | null) {
-    const nuevoValor: boolean | null =
-      asistoActual === null ? true :
-      asistoActual === true ? false :
-      null;
-    setActualizandoAsistencia(personaId);
-    try {
-      const res = await fetch(`/api/dotaciones/${dotacionId}/asignaciones`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personaId, asiste: nuevoValor }),
-      });
-      if (!res.ok) {
-        const json = await res.json();
-        throw new Error(json.error ?? `Error ${res.status}`);
-      }
-      setDotacion((prev) => prev ? {
-        ...prev,
-        personal: prev.personal.map((p) =>
-          p.persona.id === personaId
-            ? { ...p, asiste: nuevoValor }
-            : p
-        ),
-      } : prev);
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Error al actualizar asistencia');
-    } finally {
-      setActualizandoAsistencia(null);
-    }
-  }
+  // F1.5 — handleToggleAsistencia eliminado: la asistencia se gestiona
+  // ahora desde /eventos/[id]/fichajes (pantalla global por evento).
+
 
   async function handleAsignarMaterial() {
     setErrorMaterial(null);
@@ -448,12 +421,23 @@ export default function DotacionDetallePage() {
       </div>
 
       <div className="mb-8">
-        <h2 className="text-lg font-semibold text-slate-800 mb-3">
-          Personal asignado
-          <span className="ml-2 text-sm font-normal text-slate-400">
-            ({dotacion.personal.length} persona{dotacion.personal.length !== 1 ? 's' : ''})
-          </span>
-        </h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold text-slate-800">
+            Personal asignado
+            <span className="ml-2 text-sm font-normal text-slate-400">
+              ({dotacion.personal.length} persona{dotacion.personal.length !== 1 ? 's' : ''})
+            </span>
+          </h2>
+          {/* F1.5 — el control de asistencia/entrada/salida vive en la pantalla
+              global de fichajes del evento. Aquí solo se ve el personal
+              asignado y se puede desasignar. */}
+          <Link
+            href={`/eventos/${dotacion.evento.id}/fichajes`}
+            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+          >
+            Ir a fichajes del evento →
+          </Link>
+        </div>
         {dotacion.personal.length === 0 ? (
           <p className="text-sm text-slate-400 py-4 text-center border border-dashed border-slate-200 rounded-lg">
             No hay personal asignado a esta dotación.
@@ -478,30 +462,6 @@ export default function DotacionDetallePage() {
                     </p>
                   )}
                 </div>
-                <button
-                  onClick={() => handleToggleAsistencia(asignacion.persona.id, asignacion.asiste)}
-                  disabled={actualizandoAsistencia === asignacion.persona.id}
-                  className={`text-xs px-2 py-1 rounded-full font-medium border transition-colors disabled:opacity-40 ml-4
-                    ${asignacion.asiste === true
-                      ? 'bg-green-100 text-green-700 border-green-300'
-                      : asignacion.asiste === false
-                        ? 'bg-red-100 text-red-700 border-red-300'
-                        : 'bg-slate-100 text-slate-500 border-slate-300'
-                    }`}
-                  title={asignacion.asiste === true
-                    ? 'Asiste — pulsa para marcar como ausente'
-                    : asignacion.asiste === false
-                      ? 'Ausente — pulsa para volver a sin registrar'
-                      : 'Sin registrar — pulsa para marcar como asiste'}
-                >
-                  {actualizandoAsistencia === asignacion.persona.id
-                    ? '...'
-                    : asignacion.asiste === true
-                      ? '✓ Asiste'
-                      : asignacion.asiste === false
-                        ? '✗ Ausente'
-                        : '— Sin registrar'}
-                </button>
                 <button
                   onClick={() => handleDesasignar(asignacion.persona.id, asignacion.persona.nombreCompleto)}
                   disabled={desasignando === asignacion.persona.id}
