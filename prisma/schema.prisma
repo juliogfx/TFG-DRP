@@ -433,6 +433,10 @@ model Dotacion {
   estado         EstadoDotacion @default(CL0_DISPONIBLE)
   indicativo     String?        @db.VarChar(50)
   numDues        Int            @default(0) @map("num_dues")
+  /// F1.7 — Control de material: blob JSON con numeros de identificación,
+  /// flags de devolución y contadores (tarjetas, partes, baterías, temp).
+  /// Schema documentado en types/control-material.ts.
+  controlMaterial Json?         @map("control_material")
   deletedAt      DateTime?      @map("deleted_at")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")

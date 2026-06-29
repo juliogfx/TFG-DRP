@@ -235,6 +235,12 @@ export default function EventosPage() {
                     Fichajes
                   </button>
                   <button
+                    onClick={() => router.push(`/eventos/${evento.id}/control-material`)}
+                    className="text-slate-600 hover:text-slate-900 text-sm font-medium"
+                  >
+                    Material
+                  </button>
+                  <button
                     onClick={() => router.push(`/eventos/${evento.id}/editar`)}
                     className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                   >
