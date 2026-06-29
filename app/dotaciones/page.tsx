@@ -18,15 +18,21 @@ const TIPOS_DOTACION: TipoDotacion[] = [
 ];
 
 const ESTADO_STYLES: Record<string, string> = {
-  DISPONIBLE: 'bg-green-100 text-green-700',
-  EN_INTERVENCION: 'bg-yellow-100 text-yellow-700',
-  NO_OPERATIVA: 'bg-red-100 text-red-700',
+  CL0_DISPONIBLE:           'bg-green-100 text-green-700',
+  CL1_EN_CAMINO:            'bg-blue-100 text-blue-700',
+  CL2_EN_INTERVENCION:      'bg-red-100 text-red-700',
+  CL3_NO_DISPONIBLE:        'bg-gray-100 text-gray-600',
+  CL5_SOLICITUD_AYUDA:      'bg-orange-100 text-orange-700',
+  CL6_SITUACION_CONFLICTIVA:'bg-purple-100 text-purple-700',
 };
 
 const ESTADO_LABELS: Record<string, string> = {
-  DISPONIBLE: 'Disponible',
-  EN_INTERVENCION: 'En intervención',
-  NO_OPERATIVA: 'No operativa',
+  CL0_DISPONIBLE:           'CL0 Disponible',
+  CL1_EN_CAMINO:            'CL1 En camino',
+  CL2_EN_INTERVENCION:      'CL2 En intervención',
+  CL3_NO_DISPONIBLE:        'CL3 No disponible',
+  CL5_SOLICITUD_AYUDA:      'CL5 Solicitud ayuda',
+  CL6_SITUACION_CONFLICTIVA:'CL6 Sit. conflictiva',
 };
 
 const FORM_INICIAL = {
@@ -343,9 +349,12 @@ function DotacionesContent() {
                 className="w-full border border-slate-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Todos</option>
-                <option value="DISPONIBLE">Disponible</option>
-                <option value="EN_INTERVENCION">En intervención</option>
-                <option value="NO_OPERATIVA">No operativa</option>
+                <option value="CL0_DISPONIBLE">CL0 Disponible</option>
+                <option value="CL1_EN_CAMINO">CL1 En camino</option>
+                <option value="CL2_EN_INTERVENCION">CL2 En intervención</option>
+                <option value="CL3_NO_DISPONIBLE">CL3 No disponible</option>
+                <option value="CL5_SOLICITUD_AYUDA">CL5 Solicitud ayuda</option>
+                <option value="CL6_SITUACION_CONFLICTIVA">CL6 Sit. conflictiva</option>
               </select>
             </div>
           </div>

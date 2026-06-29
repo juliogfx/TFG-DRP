@@ -17,15 +17,21 @@ const TIPO_LABELS: Record<string, string> = {
 };
 
 const ESTADO_STYLES: Record<string, string> = {
-  DISPONIBLE: 'bg-green-100 text-green-700',
-  EN_INTERVENCION: 'bg-yellow-100 text-yellow-700',
-  NO_OPERATIVA: 'bg-red-100 text-red-700',
+  CL0_DISPONIBLE:           'bg-green-100 text-green-700',
+  CL1_EN_CAMINO:            'bg-blue-100 text-blue-700',
+  CL2_EN_INTERVENCION:      'bg-red-100 text-red-700',
+  CL3_NO_DISPONIBLE:        'bg-gray-100 text-gray-600',
+  CL5_SOLICITUD_AYUDA:      'bg-orange-100 text-orange-700',
+  CL6_SITUACION_CONFLICTIVA:'bg-purple-100 text-purple-700',
 };
 
 const ESTADO_LABELS: Record<string, string> = {
-  DISPONIBLE: 'Disponible',
-  EN_INTERVENCION: 'En intervención',
-  NO_OPERATIVA: 'No operativa',
+  CL0_DISPONIBLE:           'CL0 Disponible',
+  CL1_EN_CAMINO:            'CL1 En camino',
+  CL2_EN_INTERVENCION:      'CL2 En intervención',
+  CL3_NO_DISPONIBLE:        'CL3 No disponible',
+  CL5_SOLICITUD_AYUDA:      'CL5 Solicitud ayuda',
+  CL6_SITUACION_CONFLICTIVA:'CL6 Sit. conflictiva',
 };
 
 const ROLES_DOTACION = [
@@ -419,8 +425,15 @@ export default function DotacionDetallePage() {
 
       <div className="mb-8">
         <p className="text-sm font-medium text-slate-700 mb-2">Cambiar estado operativo</p>
-        <div className="flex gap-2">
-          {(['DISPONIBLE', 'EN_INTERVENCION', 'NO_OPERATIVA'] as EstadoDotacion[]).map((estado) => (
+        <div className="flex flex-wrap gap-2">
+          {([
+            'CL0_DISPONIBLE',
+            'CL1_EN_CAMINO',
+            'CL2_EN_INTERVENCION',
+            'CL3_NO_DISPONIBLE',
+            'CL5_SOLICITUD_AYUDA',
+            'CL6_SITUACION_CONFLICTIVA',
+          ] as EstadoDotacion[]).map((estado) => (
             <button
               key={estado}
               onClick={() => handleCambiarEstado(estado)}

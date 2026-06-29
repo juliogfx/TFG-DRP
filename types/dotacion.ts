@@ -10,7 +10,13 @@
  * en lib/db/. Este fichero es importable desde cualquier capa.
  */
 
-export type EstadoDotacion = 'DISPONIBLE' | 'EN_INTERVENCION' | 'NO_OPERATIVA';
+export type EstadoDotacion =
+  | 'CL0_DISPONIBLE'
+  | 'CL1_EN_CAMINO'
+  | 'CL2_EN_INTERVENCION'
+  | 'CL3_NO_DISPONIBLE'
+  | 'CL5_SOLICITUD_AYUDA'
+  | 'CL6_SITUACION_CONFLICTIVA';
 export type TipoDotacion = 'AMBULANCIA' | 'BOTIQUIN' | 'UVI' | 'SVB' | 'CLINICA' | 'AVANZADA' | 'BANQUILLO' | 'LIMA' | 'UCO_UNIT';
 export type TipoPersona = 'VOLUNTARIO' | 'FACULTATIVO';
 export type TipoMaterial = 'CONSUMIBLE' | 'REUTILIZABLE' | 'MEDICAMENTO' | 'EQUIPO';

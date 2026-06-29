@@ -109,9 +109,9 @@ export async function GET(
     }));
 
     const resumen = {
-      disponibles: dotaciones.filter((d) => d.estado === 'DISPONIBLE').length,
-      enIntervencion: dotaciones.filter((d) => d.estado === 'EN_INTERVENCION').length,
-      noOperativas: dotaciones.filter((d) => d.estado === 'NO_OPERATIVA').length,
+      disponibles: dotaciones.filter((d) => d.estado === 'CL0_DISPONIBLE').length,
+      enIntervencion: dotaciones.filter((d) => d.estado === 'CL2_EN_INTERVENCION').length,
+      noOperativas: dotaciones.filter((d) => d.estado === 'CL3_NO_DISPONIBLE').length,
       total: dotaciones.length,
     };
 

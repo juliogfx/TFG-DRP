@@ -39,33 +39,48 @@ const TIPO_LABELS: Record<string, string> = {
 };
 
 const CARD_STYLES: Record<string, string> = {
-  DISPONIBLE: 'border-green-200 bg-green-50',
-  EN_INTERVENCION: 'border-yellow-300 bg-yellow-50',
-  NO_OPERATIVA: 'border-red-200 bg-red-50',
+  CL0_DISPONIBLE:           'border-green-200 bg-green-50',
+  CL1_EN_CAMINO:            'border-blue-200 bg-blue-50',
+  CL2_EN_INTERVENCION:      'border-red-300 bg-red-50',
+  CL3_NO_DISPONIBLE:        'border-gray-200 bg-gray-50',
+  CL5_SOLICITUD_AYUDA:      'border-orange-300 bg-orange-50',
+  CL6_SITUACION_CONFLICTIVA:'border-purple-300 bg-purple-50',
 };
 
 const DOT_STYLES: Record<string, string> = {
-  DISPONIBLE: 'bg-green-500',
-  EN_INTERVENCION: 'bg-yellow-500',
-  NO_OPERATIVA: 'bg-red-500',
+  CL0_DISPONIBLE:           'bg-green-500',
+  CL1_EN_CAMINO:            'bg-blue-500',
+  CL2_EN_INTERVENCION:      'bg-red-500',
+  CL3_NO_DISPONIBLE:        'bg-gray-500',
+  CL5_SOLICITUD_AYUDA:      'bg-orange-500',
+  CL6_SITUACION_CONFLICTIVA:'bg-purple-500',
 };
 
 const ESTADO_LABELS: Record<string, string> = {
-  DISPONIBLE: 'Disponible',
-  EN_INTERVENCION: 'En intervención',
-  NO_OPERATIVA: 'No operativa',
+  CL0_DISPONIBLE:           'Disponible',
+  CL1_EN_CAMINO:            'En camino',
+  CL2_EN_INTERVENCION:      'En intervención',
+  CL3_NO_DISPONIBLE:        'No disponible',
+  CL5_SOLICITUD_AYUDA:      'Solicitud ayuda',
+  CL6_SITUACION_CONFLICTIVA:'Sit. conflictiva',
 };
 
 const ESTADO_CLAVE: Record<string, string> = {
-  DISPONIBLE: 'CL0',
-  EN_INTERVENCION: 'CL2',
-  NO_OPERATIVA: 'CL3',
+  CL0_DISPONIBLE:           'CL0',
+  CL1_EN_CAMINO:            'CL1',
+  CL2_EN_INTERVENCION:      'CL2',
+  CL3_NO_DISPONIBLE:        'CL3',
+  CL5_SOLICITUD_AYUDA:      'CL5',
+  CL6_SITUACION_CONFLICTIVA:'CL6',
 };
 
 const PILL_STYLES: Record<string, string> = {
-  DISPONIBLE: 'bg-green-50 text-green-700',
-  EN_INTERVENCION: 'bg-red-50 text-red-700',
-  NO_OPERATIVA: 'bg-slate-100 text-slate-600',
+  CL0_DISPONIBLE:           'bg-green-100 text-green-700',
+  CL1_EN_CAMINO:            'bg-blue-100 text-blue-700',
+  CL2_EN_INTERVENCION:      'bg-red-100 text-red-700',
+  CL3_NO_DISPONIBLE:        'bg-gray-100 text-gray-600',
+  CL5_SOLICITUD_AYUDA:      'bg-orange-100 text-orange-700',
+  CL6_SITUACION_CONFLICTIVA:'bg-purple-100 text-purple-700',
 };
 
 const ESTADO_EVENTO_COLOR: Record<string, string> = {
@@ -140,7 +155,7 @@ function TarjetaDotacion({
 }) {
   const router = useRouter();
   const personalCubierto = dotacion.numeroPersonasAsignadas >= dotacion.personalMinimo;
-  const enIntervencion = dotacion.estado === 'EN_INTERVENCION';
+  const enIntervencion = dotacion.estado === 'CL2_EN_INTERVENCION';
   // Responsable de la dotación: persona con rolEnDotacion que contenga
   // "responsable"; si no hay tal rol formal aún, fallback al primer asignado.
   const responsable =
@@ -604,20 +619,20 @@ function UCOContent() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
-      // Cambiar dotación a EN_INTERVENCION automáticamente.
+      // Cambiar dotación a CL2_EN_INTERVENCION automáticamente.
       // Solo aplica si efectivamente se asignó dotación al registrar.
       if (body.dotacionActivaId) {
         const dotId = body.dotacionActivaId;
         fetch(`/api/dotaciones/${dotId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ estado: 'EN_INTERVENCION' }),
+          body: JSON.stringify({ estado: 'CL2_EN_INTERVENCION' }),
         }).catch(console.error);
         setEstadoUCO((prev) => prev ? {
           ...prev,
           dotaciones: prev.dotaciones.map((d) =>
             d.id === dotId
-              ? { ...d, estado: 'EN_INTERVENCION' as const }
+              ? { ...d, estado: 'CL2_EN_INTERVENCION' as const }
               : d
           ),
         } : prev);
@@ -886,9 +901,9 @@ function UCOContent() {
               titulo="DOTACIONES"
               celdas={[
                 { etiqueta: 'Total',           valor: estadoUCO.resumen.total,         color: 'text-slate-800', onClick: () => router.push(urlDotaciones()) },
-                { etiqueta: 'CL0 Disponibles', valor: estadoUCO.resumen.disponibles,   color: 'text-green-700', onClick: () => router.push(urlDotaciones('DISPONIBLE')) },
-                { etiqueta: 'CL2 En interv.',  valor: estadoUCO.resumen.enIntervencion, color: 'text-red-700',   onClick: () => router.push(urlDotaciones('EN_INTERVENCION')) },
-                { etiqueta: 'CL3 No oper.',    valor: estadoUCO.resumen.noOperativas,   color: 'text-slate-500', onClick: () => router.push(urlDotaciones('NO_OPERATIVA')) },
+                { etiqueta: 'CL0 Disponibles', valor: estadoUCO.resumen.disponibles,   color: 'text-green-700', onClick: () => router.push(urlDotaciones('CL0_DISPONIBLE')) },
+                { etiqueta: 'CL2 En interv.',  valor: estadoUCO.resumen.enIntervencion, color: 'text-red-700',   onClick: () => router.push(urlDotaciones('CL2_EN_INTERVENCION')) },
+                { etiqueta: 'CL3 No oper.',    valor: estadoUCO.resumen.noOperativas,   color: 'text-slate-500', onClick: () => router.push(urlDotaciones('CL3_NO_DISPONIBLE')) },
               ]}
             />
             <BloqueContadores

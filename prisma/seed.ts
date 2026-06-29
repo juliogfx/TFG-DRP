@@ -484,7 +484,7 @@ async function main() {
         create: {
           eventoId,
           ...d,
-          estado: EstadoDotacion.DISPONIBLE,
+          estado: EstadoDotacion.CL0_DISPONIBLE,
           posicionId: null,
         },
       });

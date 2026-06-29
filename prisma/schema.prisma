@@ -45,9 +45,12 @@ enum TipoEmpresa {
 }
 
 enum EstadoDotacion {
-  DISPONIBLE
-  EN_INTERVENCION
-  NO_OPERATIVA
+  CL0_DISPONIBLE
+  CL1_EN_CAMINO
+  CL2_EN_INTERVENCION
+  CL3_NO_DISPONIBLE
+  CL5_SOLICITUD_AYUDA
+  CL6_SITUACION_CONFLICTIVA
 }
 
 enum TipoPersona {
@@ -425,7 +428,7 @@ model Dotacion {
   posicionId     Int?           @unique @map("posicion_id")
   tipo           TipoDotacion
   personalMinimo Int            @default(2) @map("personal_minimo")
-  estado         EstadoDotacion @default(DISPONIBLE)
+  estado         EstadoDotacion @default(CL0_DISPONIBLE)
   indicativo     String?        @db.VarChar(50)
   numDues        Int            @default(0) @map("num_dues")
   deletedAt      DateTime?      @map("deleted_at")
