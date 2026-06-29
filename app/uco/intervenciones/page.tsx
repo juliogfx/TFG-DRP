@@ -256,6 +256,7 @@ function IntervencionesContent() {
         horaFinal: i.horaFinal,
         dotacionApoyoId: i.dotacionApoyo?.id ?? null,
         hospitalDestino: i.hospitalDestino,
+        clinicaDestinoId: i.clinicaDestino?.id ?? null,
       });
       setModalIntervencion({ intervencion: i, modo: 'editar' });
       setErrorEditar(null);
@@ -337,6 +338,7 @@ function IntervencionesContent() {
       horaFinal: i.horaFinal,
       dotacionApoyoId: i.dotacionApoyo?.id ?? null,
       hospitalDestino: i.hospitalDestino,
+      clinicaDestinoId: i.clinicaDestino?.id ?? null,
     });
     setModalIntervencion({ ...modalIntervencion, modo: 'editar' });
   }
@@ -394,6 +396,22 @@ function IntervencionesContent() {
   });
 
   const eventoActual = eventos.find((e) => e.id === eventoId);
+
+  // Clínicas del evento para el selector de "Clínica de destino" (F2.4).
+  // Filtra posiciones de las dotaciones cuyo nombre contiene "CL." o
+  // "CLINICA"/"CLÍNICA"; dedupe por id de posición.
+  const clinicasDelEvento: Array<{ id: number; nombre: string; sector: string | null }> = Array.from(
+    new Map(
+      dotaciones
+        .map((d) => d.posicion)
+        .filter((p): p is { id: number; nombre: string; sector: string | null } => p != null)
+        .filter((p) => {
+          const u = p.nombre.toUpperCase();
+          return u.includes('CL.') || u.includes('CLINICA') || u.includes('CLÍNICA');
+        })
+        .map((p) => [p.id, p] as const)
+    ).values()
+  );
 
   return (
     <div>
@@ -593,10 +611,13 @@ function IntervencionesContent() {
                 <tbody className="divide-y divide-slate-100">
                   {filtradas.map((i) => {
                     const sintomatologia = i.sintomatologia?.tipo ?? '—';
+                    const sufijoDestino =
+                      i.resolucion === 'TRASLADO_HOSPITALARIO' && i.hospitalDestino ? i.hospitalDestino :
+                      (i.resolucion === 'TRASLADO_CLINICA' || i.resolucion === 'ALTA_EN_CLINICA')
+                        ? (i.clinicaDestino?.nombre ?? i.hospitalDestino ?? '')
+                      : '';
                     const resolucion = i.resolucion
-                      ? (i.resolucion === 'TRASLADO_HOSPITALARIO' && i.hospitalDestino
-                          ? `${RESOLUCION_LABEL[i.resolucion]} · ${i.hospitalDestino}`
-                          : RESOLUCION_LABEL[i.resolucion])
+                      ? (sufijoDestino ? `${RESOLUCION_LABEL[i.resolucion]} · ${sufijoDestino}` : RESOLUCION_LABEL[i.resolucion])
                       : '—';
                     return (
                     <tr
@@ -642,6 +663,7 @@ function IntervencionesContent() {
                               horaFinal: i.horaFinal,
                               dotacionApoyoId: i.dotacionApoyo?.id ?? null,
                               hospitalDestino: i.hospitalDestino,
+                              clinicaDestinoId: i.clinicaDestino?.id ?? null,
                             });
                             setModalIntervencion({ intervencion: i, modo: 'editar' });
                             setErrorEditar(null);
@@ -759,6 +781,10 @@ function IntervencionesContent() {
                     <option key={d.id} value={d.id}>{d.codigo} — {TIPO_LABELS[d.tipo] ?? d.tipo}</option>
                   ))}
                 </select>
+                <AvisoDotacionNoDisponible
+                  dotacionId={formNueva.dotacionApoyoId === '' ? null : Number(formNueva.dotacionApoyoId)}
+                  dotaciones={dotaciones}
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Resolución</label>
@@ -839,11 +865,18 @@ function IntervencionesContent() {
                 <div><span className="text-slate-500">Hora final:</span> {formatearHora(modalIntervencion.intervencion.horaFinal)}</div>
                 <div>
                   <span className="text-slate-500">Resolución:</span>{' '}
-                  {modalIntervencion.intervencion.resolucion
-                    ? (modalIntervencion.intervencion.resolucion === 'TRASLADO_HOSPITALARIO' && modalIntervencion.intervencion.hospitalDestino
-                        ? `${RESOLUCION_LABEL[modalIntervencion.intervencion.resolucion]} · ${modalIntervencion.intervencion.hospitalDestino}`
-                        : RESOLUCION_LABEL[modalIntervencion.intervencion.resolucion])
-                    : 'Sin definir'}
+                  {(() => {
+                    const iv = modalIntervencion.intervencion;
+                    if (!iv.resolucion) return 'Sin definir';
+                    const sufijo =
+                      iv.resolucion === 'TRASLADO_HOSPITALARIO' && iv.hospitalDestino ? iv.hospitalDestino :
+                      (iv.resolucion === 'TRASLADO_CLINICA' || iv.resolucion === 'ALTA_EN_CLINICA')
+                        ? (iv.clinicaDestino?.nombre ?? iv.hospitalDestino ?? '')
+                      : '';
+                    return sufijo
+                      ? `${RESOLUCION_LABEL[iv.resolucion]} · ${sufijo}`
+                      : RESOLUCION_LABEL[iv.resolucion];
+                  })()}
                 </div>
                 {modalIntervencion.intervencion.parte && (
                   <div><span className="text-slate-500">Parte:</span> {modalIntervencion.intervencion.parte}</div>
@@ -939,6 +972,11 @@ function IntervencionesContent() {
                       <option key={d.id} value={d.id}>{d.codigo} — {TIPO_LABELS[d.tipo] ?? d.tipo}</option>
                     ))}
                   </select>
+                  <AvisoDotacionNoDisponible
+                    dotacionId={formEditar.dotacionApoyoId ?? null}
+                    dotaciones={dotaciones}
+                    dotacionAnteriorId={modalIntervencion?.intervencion.dotacionApoyo?.id ?? null}
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -957,6 +995,28 @@ function IntervencionesContent() {
                     <input type="text" placeholder="Centro hospitalario de destino" value={formEditar.hospitalDestino ?? ''}
                       onChange={(e) => setFormEditar((p) => ({ ...p, hospitalDestino: e.target.value || null }))}
                       className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm mt-2" />
+                  )}
+                  {(formEditar.resolucion === 'TRASLADO_CLINICA' || formEditar.resolucion === 'ALTA_EN_CLINICA') && (
+                    clinicasDelEvento.length > 0 ? (
+                      <select
+                        value={formEditar.clinicaDestinoId ?? ''}
+                        onChange={(e) => setFormEditar((p) => ({ ...p, clinicaDestinoId: e.target.value ? Number(e.target.value) : null }))}
+                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm mt-2"
+                      >
+                        <option value="">Selecciona clínica de destino...</option>
+                        {clinicasDelEvento.map((c) => (
+                          <option key={c.id} value={c.id}>{c.nombre}{c.sector ? ` · ${c.sector}` : ''}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="Clínica de destino (texto libre)"
+                        value={formEditar.hospitalDestino ?? ''}
+                        onChange={(e) => setFormEditar((p) => ({ ...p, hospitalDestino: e.target.value || null }))}
+                        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm mt-2"
+                      />
+                    )
                   )}
                   {formEditar.horaFinal && !formEditar.resolucion && (
                     <p className="text-xs text-red-600 mt-1">La resolución es obligatoria para cerrar la intervención.</p>

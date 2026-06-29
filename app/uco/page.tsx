@@ -136,6 +136,55 @@ function calcularModo(numDotaciones: number): ModoTarjeta {
   return 'micro';
 }
 
+interface ClinicaOpcion { id: number; nombre: string; sector: string | null }
+
+/**
+ * Selector de "Clínica de destino" (F2.4). Aparece bajo el selector de
+ * resolución cuando la resolución es TRASLADO_CLINICA o ALTA_EN_CLINICA.
+ * Si el evento tiene clínicas (posiciones con "CL." o "CLINICA" en el
+ * nombre) ofrece un select; si no, cae a input de texto libre guardado en
+ * hospitalDestino (mapeo dictado por el spec a falta de campo dedicado).
+ */
+function SelectorClinicaDestino({
+  clinicas,
+  clinicaDestinoId,
+  onSelectClinica,
+  textoFallback,
+  onChangeTexto,
+}: {
+  clinicas: ClinicaOpcion[];
+  clinicaDestinoId: number | null;
+  onSelectClinica: (id: number | null) => void;
+  textoFallback: string;
+  onChangeTexto: (v: string) => void;
+}) {
+  if (clinicas.length === 0) {
+    return (
+      <input
+        type="text"
+        placeholder="Clínica de destino (texto libre)"
+        value={textoFallback}
+        onChange={(e) => onChangeTexto(e.target.value)}
+        className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm mt-2"
+      />
+    );
+  }
+  return (
+    <select
+      value={clinicaDestinoId ?? ''}
+      onChange={(e) => onSelectClinica(e.target.value ? Number(e.target.value) : null)}
+      className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm mt-2"
+    >
+      <option value="">Selecciona clínica de destino...</option>
+      {clinicas.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.nombre}{c.sector ? ` · ${c.sector}` : ''}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 /**
  * Aviso F2.6: cuando el UCO selecciona en un formulario una dotación que
  * NO está en CL0_DISPONIBLE, se muestra un mensaje informativo bajo el
@@ -441,6 +490,7 @@ function TablaIntervenciones({
   estadoDotacionPorId,
   onRowClick,
   onLlegada,
+  onLlegadaApoyo,
 }: {
   intervenciones: IntervencionListItem[];
   /** Mapa dotacionId → estado actual de la dotación, para decidir si mostrar
@@ -448,6 +498,8 @@ function TablaIntervenciones({
   estadoDotacionPorId: Map<number, string>;
   onRowClick?: (i: IntervencionListItem) => void;
   onLlegada?: (i: IntervencionListItem) => void;
+  /** Confirma llegada de la dotación de apoyo (F2.4). */
+  onLlegadaApoyo?: (i: IntervencionListItem) => void;
 }) {
   return (
     <div className="overflow-x-auto overflow-y-auto max-h-[400px] rounded-lg border border-slate-200">
@@ -467,10 +519,13 @@ function TablaIntervenciones({
         </thead>
         <tbody className="divide-y divide-slate-100">
           {intervenciones.map((i) => {
+            const sufijoDestino =
+              i.resolucion === 'TRASLADO_HOSPITALARIO' && i.hospitalDestino ? i.hospitalDestino :
+              (i.resolucion === 'TRASLADO_CLINICA' || i.resolucion === 'ALTA_EN_CLINICA')
+                ? (i.clinicaDestino?.nombre ?? i.hospitalDestino ?? '')
+              : '';
             const resolucion = i.resolucion
-              ? (i.resolucion === 'TRASLADO_HOSPITALARIO' && i.hospitalDestino
-                  ? `${RESOLUCION_LABEL[i.resolucion]} · ${i.hospitalDestino}`
-                  : RESOLUCION_LABEL[i.resolucion])
+              ? (sufijoDestino ? `${RESOLUCION_LABEL[i.resolucion]} · ${sufijoDestino}` : RESOLUCION_LABEL[i.resolucion])
               : '—';
             const sintomatologia = i.sintomatologia?.tipo ?? '—';
             const apoyoCodigos = [i.dotacionApoyo?.codigo, i.dotacionTraslado?.codigo].filter(Boolean).join(', ') || '—';
@@ -481,6 +536,11 @@ function TablaIntervenciones({
               !!i.dotacionActiva &&
               estadoDot === 'CL1_EN_CAMINO' &&
               !i.horaLlegada;
+            const estadoApoyo = i.dotacionApoyo ? estadoDotacionPorId.get(i.dotacionApoyo.id) : undefined;
+            const puedeMarcarLlegadaApoyo =
+              !!onLlegadaApoyo &&
+              !!i.dotacionApoyo &&
+              estadoApoyo === 'CL1_EN_CAMINO';
             return (
               <tr
                 key={i.id}
@@ -518,7 +578,18 @@ function TablaIntervenciones({
                       </button>
                     ) : '—'}
                 </td>
-                <td className="px-3 py-2 font-mono text-slate-600 truncate" title={apoyoCodigos}>{apoyoCodigos}</td>
+                <td className="px-3 py-2 truncate" title={apoyoCodigos}>
+                  <span className="font-mono text-slate-600">{apoyoCodigos}</span>
+                  {puedeMarcarLlegadaApoyo && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onLlegadaApoyo?.(i); }}
+                      title="Confirmar llegada de la dotación de apoyo"
+                      className="ml-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium text-[10px] px-1.5 py-0.5 rounded-md transition-colors whitespace-nowrap"
+                    >
+                      📍 Apoyo
+                    </button>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-slate-500 truncate" title={resolucion}>{resolucion}</td>
               </tr>
             );
@@ -757,6 +828,29 @@ function UCOContent() {
     }
   }
 
+  // F2.4 — Confirmar llegada de la dotación de apoyo:
+  // pone la dotación de apoyo en CL2_EN_INTERVENCION. No registra hora
+  // (el schema no la tiene) y no toca el estado de la intervención.
+  async function handleMarcarLlegadaApoyo(i: IntervencionListItem) {
+    if (!i.dotacionApoyo) return;
+    try {
+      const res = await fetch(`/api/intervenciones/${i.id}/llegada-apoyo`, { method: 'PUT' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
+      setIntervenciones((prev) => prev.map((x) => x.id === json.data.id ? json.data : x));
+      const apoyoId = i.dotacionApoyo.id;
+      setEstadoUCO((prev) => prev ? {
+        ...prev,
+        dotaciones: prev.dotaciones.map((d) =>
+          d.id === apoyoId ? { ...d, estado: 'CL2_EN_INTERVENCION' as const } : d
+        ),
+      } : prev);
+      await fetchEstado(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al registrar llegada de apoyo');
+    }
+  }
+
   // F2.1 — Liberar dotación: la dotación vuelve a CL0_DISPONIBLE.
   // NO cierra la intervención asociada — son estados independientes.
   async function handleLiberarDotacion(dotacionId: number) {
@@ -832,6 +926,22 @@ function UCOContent() {
   // decidir si mostrar el botón "Llegada" en la fila.
   const estadoDotacionPorId = new Map<number, string>();
   estadoUCO?.dotaciones.forEach((d) => estadoDotacionPorId.set(d.id, d.estado));
+
+  // Clínicas del evento para el selector de "Clínica de destino" (F2.4).
+  // Extraídas de las posiciones de las dotaciones cuyo nombre contiene
+  // "CL." o "CLINICA"/"CLÍNICA"; dedupe por id de posición.
+  const clinicasDelEvento: ClinicaOpcion[] = Array.from(
+    new Map(
+      (estadoUCO?.dotaciones ?? [])
+        .map((d) => d.posicion)
+        .filter((p): p is { id: number; nombre: string; sector: string | null } => p != null)
+        .filter((p) => {
+          const u = p.nombre.toUpperCase();
+          return u.includes('CL.') || u.includes('CLINICA') || u.includes('CLÍNICA');
+        })
+        .map((p) => [p.id, p] as const)
+    ).values()
+  );
 
   const eventosFiltrados = eventos.filter((ev) => {
     if (busquedaEvento && !ev.nombre.toLowerCase().includes(busquedaEvento.toLowerCase())) return false;
@@ -1075,6 +1185,7 @@ function UCOContent() {
                 intervenciones={intervencionesAbiertas}
                 estadoDotacionPorId={estadoDotacionPorId}
                 onLlegada={handleMarcarLlegada}
+                onLlegadaApoyo={handleMarcarLlegadaApoyo}
                 onRowClick={(i) => {
                   setFormEditar({
                     dotacionActivaId: i.dotacionActiva?.id ?? null,
@@ -1090,6 +1201,7 @@ function UCOContent() {
                     horaFinal: i.horaFinal,
                     dotacionApoyoId: i.dotacionApoyo?.id ?? null,
                     hospitalDestino: i.hospitalDestino,
+                    clinicaDestinoId: i.clinicaDestino?.id ?? null,
                   });
                   setModalEditar(i);
                   setErrorEditar(null);
@@ -1261,6 +1373,10 @@ function UCOContent() {
                       </option>
                     ))}
                 </select>
+                <AvisoDotacionNoDisponible
+                  dotacionId={formIntervencion.dotacionApoyoId === '' ? null : Number(formIntervencion.dotacionApoyoId)}
+                  dotaciones={estadoUCO?.dotaciones ?? []}
+                />
               </div>
 
               <div>
@@ -1433,6 +1549,11 @@ function UCOContent() {
                     <option key={d.id} value={d.id}>{d.codigo} — {TIPO_LABELS[d.tipo] ?? d.tipo}</option>
                   ))}
                 </select>
+                <AvisoDotacionNoDisponible
+                  dotacionId={formEditar.dotacionApoyoId ?? null}
+                  dotaciones={estadoUCO?.dotaciones ?? []}
+                  dotacionAnteriorId={modalEditar?.dotacionApoyo?.id ?? null}
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -1451,6 +1572,15 @@ function UCOContent() {
                   <input type="text" placeholder="Centro hospitalario de destino" value={formEditar.hospitalDestino ?? ''}
                     onChange={(e) => setFormEditar((p) => ({ ...p, hospitalDestino: e.target.value || null }))}
                     className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm mt-2" />
+                )}
+                {(formEditar.resolucion === 'TRASLADO_CLINICA' || formEditar.resolucion === 'ALTA_EN_CLINICA') && (
+                  <SelectorClinicaDestino
+                    clinicas={clinicasDelEvento}
+                    clinicaDestinoId={formEditar.clinicaDestinoId ?? null}
+                    onSelectClinica={(idClinica) => setFormEditar((p) => ({ ...p, clinicaDestinoId: idClinica }))}
+                    textoFallback={formEditar.hospitalDestino ?? ''}
+                    onChangeTexto={(v) => setFormEditar((p) => ({ ...p, hospitalDestino: v || null }))}
+                  />
                 )}
                 {formEditar.horaFinal && !formEditar.resolucion && (
                   <p className="text-xs text-red-600 mt-1">La resolución es obligatoria para cerrar la intervención.</p>

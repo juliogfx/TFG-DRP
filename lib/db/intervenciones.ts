@@ -36,6 +36,7 @@ const intervencionSelect = {
   dotacionActiva: { select: { id: true, codigo: true, tipo: true } },
   dotacionApoyo: { select: { id: true, codigo: true } },
   dotacionTraslado: { select: { id: true, codigo: true } },
+  clinicaDestino: { select: { id: true, nombre: true } },
 } as const;
 
 function serializarIntervencion(i: {
@@ -60,6 +61,7 @@ function serializarIntervencion(i: {
   dotacionActiva: { id: number; codigo: string; tipo: string } | null;
   dotacionApoyo: { id: number; codigo: string } | null;
   dotacionTraslado: { id: number; codigo: string } | null;
+  clinicaDestino: { id: number; nombre: string } | null;
 }): IntervencionListItem {
   return {
     id: i.id,
@@ -83,6 +85,7 @@ function serializarIntervencion(i: {
     dotacionActiva: i.dotacionActiva,
     dotacionApoyo: i.dotacionApoyo,
     dotacionTraslado: i.dotacionTraslado,
+    clinicaDestino: i.clinicaDestino,
     abierta: i.horaFinal === null,
   };
 }
@@ -212,7 +215,7 @@ export async function updateIntervencion(
 ): Promise<IntervencionListItem> {
   const actual = await prisma.intervencion.findUnique({
     where: { id },
-    select: { estado: true, dotacionActivaId: true },
+    select: { estado: true, dotacionActivaId: true, dotacionApoyoId: true },
   });
   if (!actual) {
     const err: Error & { code?: string } = new Error(`No existe intervención con id ${id}`);
@@ -221,11 +224,18 @@ export async function updateIntervencion(
   }
 
   const cerrando = input.resolucion !== undefined && input.resolucion !== null && input.horaFinal;
+
   const dotacionAnteriorId = actual.dotacionActivaId;
   const dotacionPropuestaId = input.dotacionActivaId;
   const cambioDotacion = dotacionPropuestaId !== undefined && dotacionPropuestaId !== dotacionAnteriorId;
   const asignandoNueva = cambioDotacion && dotacionPropuestaId !== null;
   const desasignando = cambioDotacion && dotacionPropuestaId === null;
+
+  // Apoyo: mismo patrón. F2.4
+  const apoyoAnteriorId = actual.dotacionApoyoId;
+  const apoyoPropuestoId = input.dotacionApoyoId;
+  const cambioApoyo = apoyoPropuestoId !== undefined && apoyoPropuestoId !== apoyoAnteriorId;
+  const asignandoApoyoNuevo = cambioApoyo && apoyoPropuestoId !== null;
 
   let estadoCalculado: EstadoIntervencion | undefined;
   if (cerrando) {
@@ -239,7 +249,7 @@ export async function updateIntervencion(
   const flagsResolucion = input.resolucion !== undefined ? flagsDesdeResolucion(input.resolucion) : {};
 
   const intervencion = await prisma.$transaction(async (tx) => {
-    // Transiciones de claves de dotación.
+    // Transiciones de claves de dotación principal.
     // El UCO confirma la llegada (CL1→CL2) en un endpoint aparte; aquí solo
     // tratamos asignar/desasignar/reasignar.
     if (cambioDotacion) {
@@ -252,6 +262,24 @@ export async function updateIntervencion(
       if (asignandoNueva && dotacionPropuestaId) {
         await tx.dotacion.update({
           where: { id: dotacionPropuestaId },
+          data: { estado: 'CL1_EN_CAMINO' },
+        });
+      }
+    }
+
+    // Transiciones de la dotación de apoyo (F2.4). Mismo ciclo CL1→CL2→CL0
+    // pero independiente de la principal — su llegada se confirma en
+    // /api/intervenciones/[id]/llegada-apoyo.
+    if (cambioApoyo) {
+      if (apoyoAnteriorId) {
+        await tx.dotacion.update({
+          where: { id: apoyoAnteriorId },
+          data: { estado: 'CL0_DISPONIBLE' },
+        });
+      }
+      if (asignandoApoyoNuevo && apoyoPropuestoId) {
+        await tx.dotacion.update({
+          where: { id: apoyoPropuestoId },
           data: { estado: 'CL1_EN_CAMINO' },
         });
       }
@@ -284,6 +312,7 @@ export async function updateIntervencion(
       ...(input.altaEnClinica !== undefined && { altaEnClinica: input.altaEnClinica }),
       ...(input.trasladoHospital !== undefined && { trasladoHospital: input.trasladoHospital }),
       ...(input.hospitalDestino !== undefined && { hospitalDestino: input.hospitalDestino }),
+      ...(input.clinicaDestinoId !== undefined && { clinicaDestinoId: input.clinicaDestinoId }),
       ...(input.dotacionTrasladoId !== undefined && { dotacionTrasladoId: input.dotacionTrasladoId }),
       ...(input.observaciones !== undefined && { observaciones: input.observaciones }),
       ...(estadoCalculado && { estado: estadoCalculado }),
@@ -332,6 +361,38 @@ export async function marcarLlegadaIntervencion(id: number): Promise<Intervencio
       data: { horaLlegada: new Date(), estado: 'EN_CURSO' },
       select: intervencionSelect,
     });
+  });
+  return serializarIntervencion(intervencion);
+}
+
+/**
+ * Confirma la llegada de la dotación de apoyo al lugar (F2.4).
+ * Pone la dotación de apoyo en CL2_EN_INTERVENCION. NO toca el estado de
+ * la intervención ni horaLlegada — son indicadores de la dotación
+ * principal. Tampoco registra una hora separada para el apoyo: el schema
+ * actual no tiene ese campo y el spec acepta esa simplificación.
+ */
+export async function marcarLlegadaApoyo(id: number): Promise<IntervencionListItem> {
+  const actual = await prisma.intervencion.findUnique({
+    where: { id },
+    select: { dotacionApoyoId: true },
+  });
+  if (!actual) {
+    const err: Error & { code?: string } = new Error(`No existe intervención con id ${id}`);
+    err.code = 'P2025';
+    throw err;
+  }
+  if (!actual.dotacionApoyoId) {
+    throw new Error('La intervención no tiene dotación de apoyo asignada.');
+  }
+
+  await prisma.dotacion.update({
+    where: { id: actual.dotacionApoyoId },
+    data: { estado: 'CL2_EN_INTERVENCION' },
+  });
+  const intervencion = await prisma.intervencion.findUniqueOrThrow({
+    where: { id },
+    select: intervencionSelect,
   });
   return serializarIntervencion(intervencion);
 }

@@ -30,6 +30,7 @@ export interface IntervencionListItem {
   dotacionActiva: { id: number; codigo: string; tipo: string } | null;
   dotacionApoyo: { id: number; codigo: string } | null;
   dotacionTraslado: { id: number; codigo: string } | null;
+  clinicaDestino: { id: number; nombre: string } | null;
   altaEnLugar: boolean;
   trasladoClinica: boolean;
   altaEnClinica: boolean;
@@ -82,6 +83,7 @@ export interface UpdateIntervencionInput {
   altaEnClinica?: boolean;
   trasladoHospital?: boolean;
   hospitalDestino?: string | null;
+  clinicaDestinoId?: number | null;
   dotacionTrasladoId?: number | null;
   observaciones?: string | null;
 }
