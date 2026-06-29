@@ -495,6 +495,61 @@ async function main() {
   await crearDotaciones(evento2.id);
   console.log('✓ Dotaciones creadas');
 
+  /**
+   * Crea las 53 posiciones del Bernabéu (F1.2) para un evento dado.
+   * 25 en PISTA + 28 en GRADA. Todas con componentesMinimo=2 y
+   * componentesMaximo=4. Puesto por defecto = primer puesto del catálogo
+   * (típicamente "Botiquín") — los puestos específicos se ajustan luego
+   * desde la UI de posiciones.
+   */
+  async function crearPosicionesEvento(eventoId: number) {
+    const puestoPorDefecto = await prisma.puesto.findFirst({ orderBy: { id: 'asc' }, select: { id: true } });
+    if (!puestoPorDefecto) {
+      console.warn('  ⚠ No hay puestos en el catálogo — saltando posiciones');
+      return;
+    }
+
+    const PISTA = [
+      'BANQ.', 'CAMNOR', 'CAMSUR', 'UVI3', 'UVI4',
+      'Z0.1', 'Z0.2', 'Z0.3', 'Z0.4', 'Z0.5', 'Z0.6', 'Z0.7', 'Z0.8', 'Z0.9',
+      'Z0.10', 'Z0.11', 'Z0.12', 'DELTA2', 'MIKE2',
+      'Z.20', 'Z.40', 'LIMA2', 'Z95-1', 'UCO', 'PAPA2',
+    ];
+    const GRADA = [
+      'UVI1', 'UVI2', 'Z200', 'Z217', 'Z218', 'SVB1Z318', 'SVB2Z317',
+      'Z443', 'Z501', 'Z520', 'Z529', 'Z710',
+      'CL.AV.', 'CL.P18', 'CL.P19', 'CL.T.A', 'CL.T.C', 'CL.T.D',
+      'CL.NV6', 'CL.PALCO', 'DELTA1', 'MIKE1', 'Z30', 'Z50',
+      'LIMA1', 'UCO1', 'Z95-1G', 'PAPA1',
+    ];
+
+    const filas = [
+      ...PISTA.map((nombre) => ({ nombre, zona: 'PISTA' as const })),
+      ...GRADA.map((nombre) => ({ nombre, zona: 'GRADA' as const })),
+    ];
+
+    for (const f of filas) {
+      const codigoQr = `${eventoId}-${f.nombre}`;
+      await prisma.posicion.upsert({
+        where: { codigoQr },
+        update: {},
+        create: {
+          eventoId,
+          nombre: f.nombre,
+          codigoQr,
+          puestoId: puestoPorDefecto.id,
+          zona: f.zona,
+          componentesMinimo: 2,
+          componentesMaximo: 4,
+        },
+      });
+    }
+  }
+
+  await crearPosicionesEvento(evento1.id);
+  await crearPosicionesEvento(evento2.id);
+  console.log('✓ Posiciones creadas (53 por evento)');
+
   console.log('\n✅ Seed completado. Datos de prueba listos en Supabase.');
 }
 

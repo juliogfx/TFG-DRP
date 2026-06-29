@@ -402,7 +402,9 @@ model Posicion {
   codigoQr          String  @unique @map("codigo_qr") @db.VarChar(100)
   puestoId          Int     @map("puesto_id")
   sector            String? @db.VarChar(100)
-  capacidadPersonas Int?    @map("capacidad_personas")
+  zona              String? @db.VarChar(20)
+  componentesMinimo Int?    @map("componentes_minimo")
+  componentesMaximo Int?    @map("componentes_maximo")
 
   evento                 Evento                      @relation(fields: [eventoId], references: [id])
   puesto                 Puesto                      @relation(fields: [puestoId], references: [id])

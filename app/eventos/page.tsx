@@ -223,6 +223,12 @@ export default function EventosPage() {
                     </button>
                   )}
                   <button
+                    onClick={() => router.push(`/eventos/${evento.id}/posiciones`)}
+                    className="text-slate-600 hover:text-slate-900 text-sm font-medium"
+                  >
+                    Posiciones
+                  </button>
+                  <button
                     onClick={() => router.push(`/eventos/${evento.id}/editar`)}
                     className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                   >
