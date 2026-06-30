@@ -229,6 +229,18 @@ export default function EventosPage() {
                     Posiciones
                   </button>
                   <button
+                    onClick={() => router.push(`/eventos/${evento.id}/dimensionamiento`)}
+                    className="text-slate-600 hover:text-slate-900 text-sm font-medium"
+                  >
+                    Dimensionamiento
+                  </button>
+                  <button
+                    onClick={() => router.push(`/eventos/${evento.id}/asignacion`)}
+                    className="text-slate-600 hover:text-slate-900 text-sm font-medium"
+                  >
+                    Asignación
+                  </button>
+                  <button
                     onClick={() => router.push(`/eventos/${evento.id}/fichajes`)}
                     className="text-slate-600 hover:text-slate-900 text-sm font-medium"
                   >

@@ -105,6 +105,81 @@ function tipoDotacionDePuesto(nombrePuesto: string, nombrePosicion: string | nul
 }
 
 /**
+ * Opción B — Dimensionamiento persistido dentro de una plantilla.
+ * Una fila por dotación; la unión con el dimensionamiento de evento se hace
+ * por `nombre` (= código de dotación).
+ */
+export interface PlantillaDimFila {
+  nombre: string;
+  incluida?: boolean;
+  med?: number; due?: number; cond?: number; tec?: number; socTec?: number; otr?: number;
+  vehiculo?: boolean; camillas?: number; silla?: boolean;
+  bBasico?: number; bDue?: number; bOxMed?: number;
+  oxig?: number; ampul?: number; morfico?: number;
+  monitor?: boolean; pPantalla?: number; portatil?: number;
+  observ?: string | null;
+}
+
+/**
+ * Devuelve las filas de dimensionamiento guardadas para una plantilla.
+ */
+export async function getDimensionamientoDePlantilla(plantillaId: number): Promise<PlantillaDimFila[]> {
+  const filas = await prisma.plantillaDimensionamiento.findMany({
+    where: { plantillaId },
+    orderBy: { id: 'asc' },
+  });
+  return filas.map((f) => ({
+    nombre: f.nombre,
+    incluida: f.incluida,
+    med: f.med, due: f.due, cond: f.cond, tec: f.tec, socTec: f.socTec, otr: f.otr,
+    vehiculo: f.vehiculo, camillas: f.camillas, silla: f.silla,
+    bBasico: f.bBasico, bDue: f.bDue, bOxMed: f.bOxMed,
+    oxig: f.oxig, ampul: f.ampul, morfico: f.morfico,
+    monitor: f.monitor, pPantalla: f.pPantalla, portatil: f.portatil,
+    observ: f.observ,
+  }));
+}
+
+/**
+ * Reemplaza el dimensionamiento de una plantilla por el array recibido.
+ * Operación atómica: borra todo lo previo y crea las filas nuevas.
+ */
+export async function saveDimensionamientoDePlantilla(
+  plantillaId: number,
+  filas: PlantillaDimFila[],
+): Promise<number> {
+  const plantilla = await prisma.plantillaEvento.findUnique({
+    where: { id: plantillaId },
+    select: { id: true },
+  });
+  if (!plantilla) {
+    const err: Error & { code?: string } = new Error(`No existe plantilla con id ${plantillaId}`);
+    err.code = 'P2025';
+    throw err;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.plantillaDimensionamiento.deleteMany({ where: { plantillaId } });
+    if (filas.length === 0) return;
+    await tx.plantillaDimensionamiento.createMany({
+      data: filas.map((f) => ({
+        plantillaId,
+        nombre: f.nombre,
+        incluida: f.incluida ?? true,
+        med: f.med ?? 0, due: f.due ?? 0, cond: f.cond ?? 0, tec: f.tec ?? 0,
+        socTec: f.socTec ?? 0, otr: f.otr ?? 0,
+        vehiculo: f.vehiculo ?? false, camillas: f.camillas ?? 0, silla: f.silla ?? false,
+        bBasico: f.bBasico ?? 0, bDue: f.bDue ?? 0, bOxMed: f.bOxMed ?? 0,
+        oxig: f.oxig ?? 0, ampul: f.ampul ?? 0, morfico: f.morfico ?? 0,
+        monitor: f.monitor ?? false, pPantalla: f.pPantalla ?? 0, portatil: f.portatil ?? 0,
+        observ: f.observ ?? null,
+      })),
+    });
+  });
+  return filas.length;
+}
+
+/**
  * Aplica una plantilla a un evento (F1.3). En una sola transacción:
  *   - Para cada PlantillaPosicion crea una Posicion en el evento
  *     (codigoQr = `${eventoId}-${nombreSugerido}`).
@@ -133,6 +208,7 @@ export async function aplicarPlantillaAEvento(
           puesto: { select: { nombre: true } },
         },
       },
+      dimensionamiento: true,
     },
   });
   if (!plantilla) {
@@ -206,6 +282,31 @@ export async function aplicarPlantillaAEvento(
         },
       });
       dotacionesCreadas++;
+    }
+
+    // Opción B — si la plantilla tiene dimensionamiento guardado, copiarlo al evento.
+    // Casamos por código de dotación (nombre de la fila == codigo de la dotación).
+    if (plantilla.dimensionamiento.length > 0) {
+      const dotacionesEvento = await tx.dotacion.findMany({
+        where: { eventoId, deletedAt: null },
+        select: { id: true, codigo: true },
+      });
+      const idPorCodigo = new Map(dotacionesEvento.map((d) => [d.codigo, d.id]));
+
+      await tx.dimensionamientoEvento.createMany({
+        data: plantilla.dimensionamiento.map((f) => ({
+          eventoId,
+          dotacionId: idPorCodigo.get(f.nombre) ?? null,
+          nombre: f.nombre,
+          incluida: f.incluida,
+          med: f.med, due: f.due, cond: f.cond, tec: f.tec, socTec: f.socTec, otr: f.otr,
+          vehiculo: f.vehiculo, camillas: f.camillas, silla: f.silla,
+          bBasico: f.bBasico, bDue: f.bDue, bOxMed: f.bOxMed,
+          oxig: f.oxig, ampul: f.ampul, morfico: f.morfico,
+          monitor: f.monitor, pPantalla: f.pPantalla, portatil: f.portatil,
+          observ: f.observ,
+        })),
+      });
     }
   });
 

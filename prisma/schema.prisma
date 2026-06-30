@@ -271,12 +271,13 @@ model PlantillaEvento {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  empresa      Empresa             @relation(fields: [empresaId], references: [id])
-  tipoEvento   TipoEventoCatalogo? @relation(fields: [tipoEventoId], references: [id])
-  ubicacion    Ubicacion?          @relation(fields: [ubicacionId], references: [id])
-  posiciones   PlantillaPosicion[]
+  empresa          Empresa                     @relation(fields: [empresaId], references: [id])
+  tipoEvento       TipoEventoCatalogo?         @relation(fields: [tipoEventoId], references: [id])
+  ubicacion        Ubicacion?                  @relation(fields: [ubicacionId], references: [id])
+  posiciones       PlantillaPosicion[]
+  dimensionamiento PlantillaDimensionamiento[]
   /// Eventos creados usando esta plantilla como base (Opción B)
-  eventos      Evento[]            @relation("EventoDesdePlantilla")
+  eventos          Evento[]                    @relation("EventoDesdePlantilla")
 
   @@index([empresaId])
   @@index([tipoEventoId])
@@ -302,6 +303,44 @@ model PlantillaPosicion {
 
   @@index([plantillaId])
   @@map("plantilla_posicion")
+}
+
+// =============================================================================
+// PLANTILLA_DIMENSIONAMIENTO (Opción B)
+// Una fila por dotación del dimensionamiento que se guarda en una plantilla.
+// El "nombre" almacena el código de la dotación (BANQ., CAMNOR, UVI1...);
+// al aplicar la plantilla casamos contra las dotaciones del nuevo evento.
+// =============================================================================
+
+model PlantillaDimensionamiento {
+  id           Int      @id @default(autoincrement())
+  plantillaId  Int      @map("plantilla_id")
+  nombre       String   @db.VarChar(50)
+  incluida     Boolean  @default(true)
+  med          Int      @default(0)
+  due          Int      @default(0)
+  cond         Int      @default(0)
+  tec          Int      @default(0)
+  socTec       Int      @default(0) @map("soc_tec")
+  otr          Int      @default(0)
+  vehiculo     Boolean  @default(false)
+  camillas     Int      @default(0)
+  silla        Boolean  @default(false)
+  bBasico      Int      @default(0) @map("b_basico")
+  bDue         Int      @default(0) @map("b_due")
+  bOxMed       Int      @default(0) @map("b_ox_med")
+  oxig         Int      @default(0)
+  ampul        Int      @default(0)
+  morfico      Int      @default(0)
+  monitor      Boolean  @default(false)
+  pPantalla    Int      @default(0) @map("p_pantalla")
+  portatil     Int      @default(0)
+  observ       String?  @db.VarChar(200)
+
+  plantilla    PlantillaEvento @relation(fields: [plantillaId], references: [id])
+
+  @@index([plantillaId])
+  @@map("plantilla_dimensionamiento")
 }
 
 // =============================================================================
@@ -387,6 +426,7 @@ model Evento {
   intervenciones     Intervencion[]
   revisionesMat      RevisionMaterial[]
   asignacionesWalkie AsignacionWalkie[]
+  dimensionamiento   DimensionamientoEvento[]
 
   @@index([fecha])
   @@index([tipoEventoId])
@@ -456,11 +496,79 @@ model Dotacion {
   intervencionesApoyo    Intervencion[]               @relation("DotacionApoyo")
   intervencionesTraslado Intervencion[]               @relation("DotacionTraslado")
   estadosLog             EstadoDotacionLog[]
+  plazas                 PlazaDotacion[]
+  dimensionamiento       DimensionamientoEvento[]
 
   @@unique([eventoId, codigo])
   @@index([eventoId])
   @@index([estado])
   @@map("dotacion")
+}
+
+// =============================================================================
+// PLAZA_DOTACION (Opción B)
+// Cada dotación tiene N plazas (1..4 según el tipo). Cada plaza puede tener
+// una persona asignada y un rol requerido (CONDUCTOR, MEDICO, etc.).
+// =============================================================================
+
+model PlazaDotacion {
+  id              Int       @id @default(autoincrement())
+  dotacionId      Int       @map("dotacion_id")
+  numero          Int
+  nombre          String    @db.VarChar(30)
+  rolRequerido    String?   @map("rol_requerido") @db.VarChar(50)
+  personaId       Int?      @map("persona_id")
+  incorporacion   String?   @db.VarChar(20)
+  observaciones   String?   @db.Text
+
+  dotacion        Dotacion  @relation(fields: [dotacionId], references: [id])
+  persona         Persona?  @relation(fields: [personaId], references: [id])
+
+  @@unique([dotacionId, numero])
+  @@index([dotacionId])
+  @@index([personaId])
+  @@map("plaza_dotacion")
+}
+
+// =============================================================================
+// DIMENSIONAMIENTO_EVENTO (Opción B)
+// Tabla por evento que recoge RRHH y RRMM por dotación: una fila por dotación.
+// =============================================================================
+
+model DimensionamientoEvento {
+  id          Int       @id @default(autoincrement())
+  eventoId    Int       @map("evento_id")
+  dotacionId  Int?      @map("dotacion_id")
+  nombre      String    @db.VarChar(50)
+  incluida    Boolean   @default(true)
+  // RRHH
+  med         Int       @default(0)
+  due         Int       @default(0)
+  cond        Int       @default(0)
+  tec         Int       @default(0)
+  socTec      Int       @default(0) @map("soc_tec")
+  otr         Int       @default(0)
+  // RRMM
+  vehiculo    Boolean   @default(false)
+  camillas    Int       @default(0)
+  silla       Boolean   @default(false)
+  bBasico     Int       @default(0) @map("b_basico")
+  bDue        Int       @default(0) @map("b_due")
+  bOxMed      Int       @default(0) @map("b_ox_med")
+  oxig        Int       @default(0)
+  ampul       Int       @default(0)
+  morfico     Int       @default(0)
+  monitor     Boolean   @default(false)
+  pPantalla   Int       @default(0) @map("p_pantalla")
+  portatil    Int       @default(0)
+  observ      String?   @db.VarChar(200)
+
+  evento      Evento    @relation(fields: [eventoId], references: [id])
+  dotacion    Dotacion? @relation(fields: [dotacionId], references: [id])
+
+  @@index([eventoId])
+  @@index([dotacionId])
+  @@map("dimensionamiento_evento")
 }
 
 // =============================================================================
@@ -504,6 +612,7 @@ model Persona {
 
   titulacion   TitulacionCatalogo? @relation(fields: [titulacionId], references: [id])
   asignaciones AsignacionPersonalDotacion[]
+  plazas       PlazaDotacion[]
 
   @@index([tipo])
   @@index([activo])

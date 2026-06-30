@@ -449,6 +449,13 @@ export default function DotacionDetallePage() {
         )}
       </div>
 
+      {/* Opción B — Plazas (RRHH numeradas + rol requerido + persona asignada). */}
+      <PlazasSeccion
+        dotacionId={dotacionId}
+        eventoId={dotacion.evento.id}
+        personalDisponible={personalDisponible}
+      />
+
       {/* F1.7 — Material y walkies se gestionan en /eventos/[id]/control-material */}
       <div className="border border-slate-200 rounded-lg p-4 bg-slate-50 mt-6 flex items-center justify-between">
         <div>
@@ -462,6 +469,184 @@ export default function DotacionDetallePage() {
           Ir a control de material del evento →
         </Link>
       </div>
+    </div>
+  );
+}
+
+interface PlazaApiItem {
+  id: number;
+  numero: number;
+  nombre: string;
+  rolRequerido: string | null;
+  incorporacion: string | null;
+  persona: { id: number; nombreCompleto: string; tipo: string; titulacion: string | null } | null;
+}
+
+const ROLES_PLAZA = ['CONDUCTOR', 'TECNICO', 'MEDICO', 'ENFERMERO', 'SOCORRISTA', 'COORDINADOR', 'OTRO'];
+const INCORPORACIONES_PLAZA = ['PLANTIO', 'SERVICIO', 'B85', 'OTRO'];
+
+function PlazasSeccion({
+  dotacionId,
+  eventoId,
+  personalDisponible,
+}: {
+  dotacionId: number;
+  eventoId: number;
+  personalDisponible: PersonaListItem[];
+}) {
+  const [plazas, setPlazas] = useState<PlazaApiItem[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const cargarPlazas = async () => {
+    setCargando(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/dotaciones/${dotacionId}/plazas`);
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+      const json = await res.json();
+      setPlazas(json.data ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al cargar plazas');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  useEffect(() => { cargarPlazas(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [dotacionId]);
+
+  async function actualizar(
+    plazaId: number,
+    cambios: { personaId?: number | null; rolRequerido?: string | null; incorporacion?: string | null }
+  ) {
+    setGuardando(plazaId);
+    try {
+      const res = await fetch(`/api/dotaciones/${dotacionId}/plazas/${plazaId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cambios),
+      });
+      if (!res.ok) {
+        const j = await res.json();
+        throw new Error(j.error ?? `Error ${res.status}`);
+      }
+      await cargarPlazas();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error al actualizar plaza');
+    } finally {
+      setGuardando(null);
+    }
+  }
+
+  const yaAsignados = new Set(plazas.filter((p) => p.persona).map((p) => p.persona!.id));
+
+  return (
+    <div className="border border-slate-200 rounded-lg p-4 bg-white mt-6">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-slate-800">
+          Plazas
+          <span className="ml-2 text-xs font-normal text-slate-400">({plazas.length})</span>
+        </h2>
+        <Link
+          href={`/eventos/${eventoId}/asignacion`}
+          className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+        >
+          Ver asignación del evento →
+        </Link>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-md text-sm mb-3">{error}</div>
+      )}
+
+      {cargando ? (
+        <p className="text-sm text-slate-400">Cargando plazas…</p>
+      ) : plazas.length === 0 ? (
+        <p className="text-sm text-slate-400 py-3 text-center border border-dashed border-slate-200 rounded">
+          Esta dotación no tiene plazas configuradas.
+        </p>
+      ) : (
+        <table className="w-full text-sm">
+          <thead className="border-b border-slate-200">
+            <tr>
+              <th className="text-left px-2 py-1.5 font-medium text-slate-600 w-20">Plaza</th>
+              <th className="text-left px-2 py-1.5 font-medium text-slate-600 w-32">Rol</th>
+              <th className="text-left px-2 py-1.5 font-medium text-slate-600">Asistente</th>
+              <th className="text-left px-2 py-1.5 font-medium text-slate-600 w-32">Incorp.</th>
+              <th className="text-right px-2 py-1.5 font-medium text-slate-600 w-20"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {plazas.map((p) => (
+              <tr key={p.id}>
+                <td className="px-2 py-1.5 font-mono font-semibold text-slate-800">{p.nombre}</td>
+                <td className="px-2 py-1.5">
+                  <select
+                    value={p.rolRequerido ?? ''}
+                    onChange={(e) => actualizar(p.id, { rolRequerido: e.target.value || null })}
+                    className="w-full border border-slate-300 rounded px-2 py-1 text-xs"
+                  >
+                    <option value="">—</option>
+                    {ROLES_PLAZA.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </td>
+                <td className="px-2 py-1.5">
+                  {p.persona ? (
+                    <span className="text-sm">
+                      <span className="font-medium text-slate-800">{p.persona.nombreCompleto}</span>
+                      <span className="text-xs text-slate-500 ml-1">
+                        ({p.persona.tipo === 'FACULTATIVO' ? 'FAC' : 'VOL'}{p.persona.titulacion ? ` · ${p.persona.titulacion}` : ''})
+                      </span>
+                    </span>
+                  ) : (
+                    <select
+                      defaultValue=""
+                      onChange={(e) => {
+                        const id = Number(e.target.value);
+                        if (id) actualizar(p.id, { personaId: id });
+                      }}
+                      className="w-full border border-slate-300 rounded px-2 py-1 text-xs"
+                    >
+                      <option value="">— Asignar persona —</option>
+                      {personalDisponible
+                        .filter((per) => !yaAsignados.has(per.id))
+                        .map((per) => (
+                          <option key={per.id} value={per.id}>
+                            {per.nombreCompleto} ({per.tipo === 'FACULTATIVO' ? 'FAC' : 'VOL'}{per.titulacion ? ` · ${per.titulacion}` : ''})
+                          </option>
+                        ))}
+                    </select>
+                  )}
+                </td>
+                <td className="px-2 py-1.5">
+                  <select
+                    value={p.incorporacion ?? ''}
+                    onChange={(e) => actualizar(p.id, { incorporacion: e.target.value || null })}
+                    className="w-full border border-slate-300 rounded px-2 py-1 text-xs"
+                  >
+                    <option value="">—</option>
+                    {INCORPORACIONES_PLAZA.map((i) => <option key={i} value={i}>{i}</option>)}
+                  </select>
+                </td>
+                <td className="px-2 py-1.5 text-right">
+                  {p.persona ? (
+                    <button
+                      onClick={() => actualizar(p.id, { personaId: null })}
+                      disabled={guardando === p.id}
+                      className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-40"
+                    >
+                      Liberar
+                    </button>
+                  ) : (
+                    guardando === p.id ? <span className="text-xs text-slate-400">…</span> : null
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

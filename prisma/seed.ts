@@ -534,6 +534,61 @@ async function main() {
   console.log('✓ Dotaciones creadas');
 
   /**
+   * Opción B — Genera las plazas estándar de cada dotación según su tipo.
+   * El número de plazas depende del tipo (UVI=4, AMB=4, LIMA/PAPA=2, etc.).
+   * El rol requerido se pre-asigna en posiciones canónicas (conductor en 1,
+   * técnico en 2, médico en 3, enfermero en 4) cuando aplica. Idempotente:
+   * usa upsert por (dotacionId, numero).
+   */
+  async function crearPlazasDotaciones(eventoId: number) {
+    const dotaciones = await prisma.dotacion.findMany({
+      where: { eventoId, deletedAt: null },
+      select: { id: true, codigo: true, tipo: true },
+    });
+
+    function plantillaPorTipo(tipo: TipoDotacion): { numPlazas: number; roles: Record<number, string | null> } {
+      switch (tipo) {
+        case TipoDotacion.UVI:
+          return { numPlazas: 4, roles: { 1: 'CONDUCTOR', 2: 'TECNICO', 3: 'MEDICO', 4: 'ENFERMERO' } };
+        case TipoDotacion.AMBULANCIA:
+        case TipoDotacion.SVB:
+          return { numPlazas: 4, roles: { 1: 'CONDUCTOR', 2: 'TECNICO', 3: null, 4: null } };
+        case TipoDotacion.AVANZADA:
+        case TipoDotacion.CLINICA:
+          return { numPlazas: 4, roles: { 1: null, 2: null, 3: 'MEDICO', 4: 'ENFERMERO' } };
+        case TipoDotacion.BANQUILLO:
+          return { numPlazas: 4, roles: {} };
+        case TipoDotacion.LIMA:
+        case TipoDotacion.UCO_UNIT:
+          return { numPlazas: 2, roles: {} };
+        case TipoDotacion.BOTIQUIN:
+        default:
+          return { numPlazas: 4, roles: {} };
+      }
+    }
+
+    for (const d of dotaciones) {
+      const { numPlazas, roles } = plantillaPorTipo(d.tipo);
+      for (let numero = 1; numero <= numPlazas; numero++) {
+        await prisma.plazaDotacion.upsert({
+          where: { dotacionId_numero: { dotacionId: d.id, numero } },
+          update: {},
+          create: {
+            dotacionId: d.id,
+            numero,
+            nombre: `${d.codigo}-${numero}`,
+            rolRequerido: roles[numero] ?? null,
+          },
+        });
+      }
+    }
+  }
+
+  await crearPlazasDotaciones(evento1.id);
+  await crearPlazasDotaciones(evento2.id);
+  console.log('✓ Plazas de dotación creadas');
+
+  /**
    * Crea las 53 posiciones del Bernabéu (F1.2) para un evento dado.
    * 25 en PISTA + 28 en GRADA. Todas con componentesMinimo=2 y
    * componentesMaximo=4. El puesto se deduce del nombre de la posición
@@ -697,10 +752,64 @@ async function main() {
         sector: p.sector,
       })),
     });
+
+    // Opción B — Dimensionamiento real de la plantilla (datos del Excel).
+    // Una fila por posición/dotación. Filas no listadas se rellenan con NO+0.
+    type DimRow = {
+      nombre: string;
+      incluida?: boolean;
+      med?: number; due?: number; cond?: number; tec?: number; socTec?: number; otr?: number;
+      vehiculo?: boolean; camillas?: number; silla?: boolean;
+      bBasico?: number; bDue?: number; bOxMed?: number;
+      oxig?: number; ampul?: number; morfico?: number;
+      monitor?: boolean; pPantalla?: number; portatil?: number;
+      observ?: string | null;
+    };
+    const dimReales: DimRow[] = [
+      // PISTA — operativas
+      { nombre: 'BANQ.',  incluida: true, med: 1, due: 1, bDue: 1, bOxMed: 1, oxig: 1, ampul: 1, morfico: 1, monitor: true, portatil: 1 },
+      { nombre: 'CAMNOR', incluida: true, socTec: 4, camillas: 1, bBasico: 1, portatil: 2 },
+      { nombre: 'CAMSUR', incluida: true, socTec: 4, camillas: 1, bBasico: 1, portatil: 2 },
+      { nombre: 'Z95-1',  incluida: true, cond: 1, portatil: 1 },
+      // GRADA — clínicas y SVBs operativas, resto NO
+      { nombre: 'SVB1Z318', incluida: true, cond: 1, tec: 1, vehiculo: true, bBasico: 1 },
+      { nombre: 'SVB2Z317', incluida: true, cond: 1, tec: 1, vehiculo: true, bBasico: 1 },
+      { nombre: 'CL.AV.',  incluida: true, med: 1, due: 1, bDue: 1, bOxMed: 1, oxig: 1, monitor: true, portatil: 1 },
+      { nombre: 'CL.P18',  incluida: true, med: 1, due: 1, bDue: 1, bOxMed: 1 },
+      { nombre: 'CL.P19',  incluida: true, med: 1, due: 1, bDue: 1, bOxMed: 1 },
+      { nombre: 'CL.T.A',  incluida: true, med: 1, due: 1, bDue: 1 },
+      { nombre: 'CL.T.C',  incluida: true, med: 1, due: 1, bDue: 1 },
+      { nombre: 'CL.T.D',  incluida: true, med: 1, due: 1, bDue: 1 },
+      { nombre: 'CL.NV6',  incluida: true, med: 1, due: 1, bDue: 1 },
+      { nombre: 'CL.PALCO', incluida: true, med: 1, due: 1, bDue: 1 },
+      { nombre: 'Z95-1G',  incluida: true, cond: 1, portatil: 1 },
+    ];
+    const dimPorNombre = new Map<string, DimRow>(dimReales.map((r) => [r.nombre, r]));
+    const todasFilasDim: DimRow[] = todas.map((p) => {
+      const real = dimPorNombre.get(p.nombre);
+      if (real) return real;
+      return { nombre: p.nombre, incluida: false };
+    });
+
+    await prisma.plantillaDimensionamiento.deleteMany({ where: { plantillaId: plantilla.id } });
+    await prisma.plantillaDimensionamiento.createMany({
+      data: todasFilasDim.map((f) => ({
+        plantillaId: plantilla.id,
+        nombre: f.nombre,
+        incluida: f.incluida ?? false,
+        med: f.med ?? 0, due: f.due ?? 0, cond: f.cond ?? 0, tec: f.tec ?? 0,
+        socTec: f.socTec ?? 0, otr: f.otr ?? 0,
+        vehiculo: f.vehiculo ?? false, camillas: f.camillas ?? 0, silla: f.silla ?? false,
+        bBasico: f.bBasico ?? 0, bDue: f.bDue ?? 0, bOxMed: f.bOxMed ?? 0,
+        oxig: f.oxig ?? 0, ampul: f.ampul ?? 0, morfico: f.morfico ?? 0,
+        monitor: f.monitor ?? false, pPantalla: f.pPantalla ?? 0, portatil: f.portatil ?? 0,
+        observ: f.observ ?? null,
+      })),
+    });
   }
 
   await crearPlantillaFutbolBernabeu();
-  console.log('✓ Plantilla BER-PLA-RMD-FUTBOL creada (53 posiciones)');
+  console.log('✓ Plantilla BER-PLA-RMD-FUTBOL creada (53 posiciones + dimensionamiento)');
 
   console.log('\n✅ Seed completado. Datos de prueba listos en Supabase.');
 }
