@@ -35,6 +35,8 @@ export interface EventoDetalle {
   rival: string | null;
   aforoPrevisto: number | null;
   aforoEstimado: number | null;
+  aforoTotal: number | null;
+  personalRiesgo: string | null;
   temporada: string | null;
   empresaPromotor: { id: number; nombre: string; codigo: string; } | null;
   empresaContratada: { id: number; nombre: string; codigo: string; } | null;
@@ -58,6 +60,9 @@ export interface CreateEventoInput {
   tipoEventoId?: number;
   rival?: string;
   aforoPrevisto?: number;
+  aforoEstimado?: number;
+  aforoTotal?: number;
+  personalRiesgo?: string;
   temporada?: string;
   empresaPromotorId?: number;
   empresaContratadaId?: number;
@@ -80,6 +85,8 @@ export interface UpdateEventoInput {
   rival?: string;
   aforoPrevisto?: number;
   aforoEstimado?: number;
+  aforoTotal?: number;
+  personalRiesgo?: string;
   temporada?: string;
   empresaPromotorId?: number;
   empresaContratadaId?: number;

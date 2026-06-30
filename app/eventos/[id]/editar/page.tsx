@@ -64,6 +64,8 @@ export default function EditarEventoPage() {
           rival: evento.rival ?? '',
           aforoPrevisto: evento.aforoPrevisto ?? undefined,
           aforoEstimado: evento.aforoEstimado ?? undefined,
+          aforoTotal: evento.aforoTotal ?? undefined,
+          personalRiesgo: evento.personalRiesgo ?? '',
           temporada: evento.temporada ?? '',
           empresaPromotorId: evento.empresaPromotor?.id ?? undefined,
           empresaContratadaId: evento.empresaContratada?.id ?? undefined,
@@ -91,7 +93,7 @@ export default function EditarEventoPage() {
   function actualizarCampo(campo: keyof UpdateEventoInput, valor: string) {
     setForm((prev) => ({
       ...prev,
-      [campo]: ['ubicacionId', 'tipoEventoId', 'aforoPrevisto', 'aforoEstimado', 'empresaPromotorId', 'empresaContratadaId', 'equipoLocalId', 'equipoVisitanteId'].includes(campo)
+      [campo]: ['ubicacionId', 'tipoEventoId', 'aforoPrevisto', 'aforoEstimado', 'aforoTotal', 'empresaPromotorId', 'empresaContratadaId', 'equipoLocalId', 'equipoVisitanteId'].includes(campo)
         ? (valor === '' ? undefined : Number(valor)) : valor,
     }));
   }
@@ -397,6 +399,42 @@ export default function EditarEventoPage() {
           <textarea value={form.observaciones ?? ''} onChange={(e) => actualizarCampo('observaciones', e.target.value)}
             rows={3} placeholder="Notas adicionales sobre el evento..."
             className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Aforo total del recinto</label>
+            <input
+              type="number"
+              min={0}
+              value={form.aforoTotal ?? ''}
+              onChange={(e) => actualizarCampo('aforoTotal', e.target.value)}
+              placeholder="ej: 85000"
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Aforo estimado para este evento</label>
+            <input
+              type="number"
+              min={0}
+              value={form.aforoEstimado ?? ''}
+              onChange={(e) => actualizarCampo('aforoEstimado', e.target.value)}
+              placeholder="ej: 60000"
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Personal de riesgo</label>
+          <textarea
+            rows={3}
+            value={form.personalRiesgo ?? ''}
+            onChange={(e) => actualizarCampo('personalRiesgo', e.target.value)}
+            placeholder="ej: 150 ultras visitantes sector norte, vikingos en sector 400..."
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-4">

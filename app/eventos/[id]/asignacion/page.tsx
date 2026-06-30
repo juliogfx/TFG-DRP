@@ -35,6 +35,7 @@ interface GrupoApi {
     id: number;
     codigo: string;
     tipo: string;
+    indicativo: string | null;
     posicion: { id: number; nombre: string; zona: string | null } | null;
   };
   plazas: PlazaApi[];
@@ -152,6 +153,11 @@ export default function AsignacionPage() {
                 <div>
                   <span className="font-mono font-semibold text-slate-900">{g.dotacion.codigo}</span>
                   <span className="text-xs text-slate-500 ml-2">{g.dotacion.tipo}</span>
+                  {g.dotacion.indicativo && (
+                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-mono font-medium">
+                      {g.dotacion.indicativo}
+                    </span>
+                  )}
                   {g.dotacion.posicion && (
                     <span className="text-xs text-slate-500 ml-2">· {g.dotacion.posicion.nombre} ({g.dotacion.posicion.zona ?? '—'})</span>
                   )}

@@ -384,6 +384,8 @@ model Evento {
   equipoVisitanteId Int?    @map("equipo_visitante_id")
   aforoPrevisto         Int?      @map("aforo_previsto")
   aforoEstimado         Int?      @map("aforo_estimado")
+  aforoTotal            Int?      @map("aforo_total")
+  personalRiesgo        String?   @map("personal_riesgo") @db.Text
   contratoId            Int?      @map("contrato_id")
   temporada             String?   @db.VarChar(20)
   empresaPromotorId     Int?      @map("empresa_promotor_id")

@@ -30,6 +30,7 @@ export interface PlazasDeDotacion {
     id: number;
     codigo: string;
     tipo: TipoDotacion;
+    indicativo: string | null;
     posicion: { id: number; nombre: string; zona: string | null } | null;
   };
   plazas: PlazaItem[];
@@ -126,6 +127,7 @@ export async function getPlazasByEvento(eventoId: number): Promise<PlazasDeDotac
       id: true,
       codigo: true,
       tipo: true,
+      indicativo: true,
       posicion: { select: { id: true, nombre: true, zona: true } },
       plazas: { select: plazaSelect, orderBy: { numero: 'asc' } },
     },
@@ -137,6 +139,7 @@ export async function getPlazasByEvento(eventoId: number): Promise<PlazasDeDotac
       id: d.id,
       codigo: d.codigo,
       tipo: d.tipo,
+      indicativo: d.indicativo,
       posicion: d.posicion,
     },
     plazas: d.plazas.map(serializarPlaza),
