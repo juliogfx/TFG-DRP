@@ -18,6 +18,12 @@ interface NavItem {
   href: string;
   label: string;
   hint: string;
+  /**
+   * true para accesos rápidos que comparten href con otro item (Eventos).
+   * Evita que Fichajes/Material/Asignación se iluminen a la vez que Eventos
+   * cuando la ruta actual empieza por /eventos.
+   */
+  soloAcceso?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -26,6 +32,12 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dotaciones', label: 'Dotaciones', hint: 'Dotaciones y personal' },
   { href: '/uco',        label: 'UCO',        hint: 'Dashboard UCO' },
   { href: '/uco/intervenciones', label: 'Intervenciones', hint: 'Registro de intervenciones' },
+  // Fichajes/Material/Asignación son subpantallas por evento — no tienen
+  // ruta global. El enlace lleva a /eventos para que el usuario elija el
+  // evento primero, y el hint lo indica.
+  { href: '/eventos', label: 'Fichajes',   hint: 'Control de asistencia por evento', soloAcceso: true },
+  { href: '/eventos', label: 'Material',   hint: 'Control de material por evento',   soloAcceso: true },
+  { href: '/eventos', label: 'Asignación', hint: 'Asignación de asistentes a plazas', soloAcceso: true },
   { href: '/apoyo-informatico', label: 'Apoyo IT', hint: 'Catálogos y configuración' },
 ];
 
@@ -59,10 +71,10 @@ export default function Sidebar() {
 
       <nav className="flex-1 space-y-1">
         {NAV_ITEMS.map((item) => {
-          const activo = esActivo(item.href);
+          const activo = !item.soloAcceso && esActivo(item.href);
           return (
             <Link
-              key={item.href}
+              key={item.label}
               href={item.href}
               className={`block rounded-md px-3 py-2 transition-colors ${
                 activo

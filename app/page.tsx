@@ -84,7 +84,7 @@ export default function HomePage() {
   return (
     <div className="max-w-4xl">
       <div className="mb-10">
-        <h1 className="text-3xl font-bold text-slate-900 mb-3">DRP-Platform</h1>
+        <h1 className="text-3xl font-bold text-slate-900 mb-3">Plataforma DRP</h1>
         <p className="text-lg text-slate-600 leading-relaxed">
           Sistema de gestión digital para{' '}
           <span className="font-semibold text-slate-800">Dispositivos de Riesgos Previsibles</span>.
