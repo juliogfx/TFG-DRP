@@ -6,9 +6,10 @@
  * Muestra el estado de todas las dotaciones, contadores clicables y
  * tabla de intervenciones EN CURSO, con actualización automática cada 30s.
  *
- * Tarjetas de dotación siempre 4 por fila:
- *   ≤16 dotaciones = normal (nombres + teléfonos)
- *   >16 dotaciones  = compacto (info condensada + responsables)
+ * Tarjetas de dotación: el UCO elige nº de columnas (2/4/6/8) desde el
+ * separador "Estado de dotaciones". La preferencia se guarda en localStorage.
+ *   2 y 4 columnas → tarjeta con toda la información (personal, teléfonos, footer)
+ *   6 y 8 columnas → tarjeta reducida (código + tipo + badge + ratio)
  *
  * Para gestión completa de intervenciones navegar a /uco/intervenciones.
  */
@@ -31,7 +32,12 @@ import type {
 } from '@/types/intervencion';
 import DateTimeInput from '@/app/components/DateTimeInput';
 
-type ModoTarjeta = 'amplio' | 'normal' | 'compacto' | 'mini' | 'micro';
+type ModoTarjeta = 'normal' | 'compacto';
+
+const COLUMN_OPTIONS = [2, 4, 6, 8] as const;
+type NumColumnas = typeof COLUMN_OPTIONS[number];
+
+const LOCALSTORAGE_KEY_COLUMNAS = 'uco-dashboard-columnas';
 
 const TIPO_LABELS: Record<string, string> = {
   AMBULANCIA: 'Ambulancia', BOTIQUIN: 'Botiquín', UVI: 'UVI Móvil',
@@ -46,15 +52,6 @@ const CARD_STYLES: Record<string, string> = {
   CL3_NO_DISPONIBLE:        'border-gray-200 bg-gray-50',
   CL5_SOLICITUD_AYUDA:      'border-orange-300 bg-orange-50',
   CL6_SITUACION_CONFLICTIVA:'border-purple-300 bg-purple-50',
-};
-
-const DOT_STYLES: Record<string, string> = {
-  CL0_DISPONIBLE:           'bg-green-500',
-  CL1_EN_CAMINO:            'bg-blue-500',
-  CL2_EN_INTERVENCION:      'bg-red-500',
-  CL3_NO_DISPONIBLE:        'bg-gray-500',
-  CL5_SOLICITUD_AYUDA:      'bg-orange-500',
-  CL6_SITUACION_CONFLICTIVA:'bg-purple-500',
 };
 
 const ESTADO_LABELS: Record<string, string> = {
@@ -97,14 +94,11 @@ const GRAVEDAD_STYLES: Record<string, string> = {
   CRITICA:  'bg-red-100 text-red-700',
 };
 
-// Siempre 4 columnas — el modo (normal|compacto) solo cambia el contenido
-// interno de la tarjeta, no la disposición del grid.
-const GRID_CLASSES: Record<ModoTarjeta, string> = {
-  amplio:   'grid grid-cols-4 gap-4',
-  normal:   'grid grid-cols-4 gap-3',
-  compacto: 'grid grid-cols-4 gap-3',
-  mini:     'grid grid-cols-4 gap-2',
-  micro:    'grid grid-cols-4 gap-2',
+const GRID_BY_COLS: Record<NumColumnas, string> = {
+  2: 'grid grid-cols-2 gap-4',
+  4: 'grid grid-cols-4 gap-3',
+  6: 'grid grid-cols-6 gap-3',
+  8: 'grid grid-cols-8 gap-2',
 };
 
 const FORM_INTERVENCION_INICIAL = {
@@ -130,8 +124,8 @@ const RESOLUCION_LABEL: Record<ResolucionIntervencion, string> = {
 
 const POLLING_INTERVAL_MS = 30_000;
 
-function calcularModo(numDotaciones: number): ModoTarjeta {
-  return numDotaciones <= 16 ? 'normal' : 'compacto';
+function calcularModo(numColumnas: NumColumnas): ModoTarjeta {
+  return numColumnas <= 4 ? 'normal' : 'compacto';
 }
 
 interface ClinicaOpcion { id: number; nombre: string; sector: string | null }
@@ -292,58 +286,11 @@ function TarjetaDotacion({
       ↩ Liberar
     </button>
   ) : null;
-  const botonLiberarMicro = puedeLiberar ? (
-    <button
-      onClick={clickLiberar}
-      title="Liberar dotación (CL0 Disponible)"
-      className="text-[10px] text-green-700 hover:text-green-900 font-bold leading-none px-1"
-    >
-      ↩
-    </button>
-  ) : null;
 
-  // MICRO — solo código + punto de color
-  if (modo === 'micro') {
-    return (
-      <div
-        onClick={navegarBody}
-        className={`rounded border ${CARD_STYLES[dotacion.estado]} p-2 flex items-center gap-1.5 cursor-pointer hover:ring-2 ${enIntervencion ? 'hover:ring-red-300' : 'hover:ring-slate-300'}`}
-        title={tituloHover}
-      >
-        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${DOT_STYLES[dotacion.estado]}`} />
-        <span className="text-xs font-mono font-bold text-slate-900 truncate">{dotacion.codigo}</span>
-        {botonLiberarMicro && <span className="ml-auto">{botonLiberarMicro}</span>}
-      </div>
-    );
-  }
-
-  // MINI — código + pill estado + icono cobertura
-  if (modo === 'mini') {
-    return (
-      <div
-        onClick={navegarBody}
-        className={`rounded border ${CARD_STYLES[dotacion.estado]} p-2 cursor-pointer hover:ring-2 ${enIntervencion ? 'hover:ring-red-300' : 'hover:ring-slate-300'}`}
-        title={tituloHover}
-      >
-        <div className="flex items-center justify-between gap-1">
-          <span className="text-xs font-mono font-bold text-slate-900 truncate">{dotacion.codigo}</span>
-          <span className={`text-[10px] ${personalCubierto ? 'text-green-700' : 'text-red-600'}`}>
-            {personalCubierto ? '✓' : '✗'}
-          </span>
-        </div>
-        <span className={`block mt-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full text-center ${pillClase}`}>
-          {pillTexto}
-        </span>
-        {botonLiberar && <div className="mt-1 flex justify-center">{botonLiberar}</div>}
-      </div>
-    );
-  }
-
-  // COMPACTO — código + tipo + pill + cobertura número + responsables 1 y 2
+  // COMPACTO — versión reducida para 6/8 columnas: código + tipo + badge + ratio
+  // (sin lista de personas ni teléfonos, no caben). Mantenemos el botón Liberar
+  // porque es una acción operativa, no información.
   if (modo === 'compacto') {
-    const responsablesCompacto = [responsable, responsable2].filter(
-      (r): r is NonNullable<typeof r> => r !== null,
-    );
     return (
       <div
         onClick={navegarBody}
@@ -353,133 +300,61 @@ function TarjetaDotacion({
         <div className="flex items-center justify-between mb-1">
           <span className="text-sm font-mono font-bold text-slate-900">{dotacion.codigo}</span>
           <span className={`text-xs font-semibold ${personalCubierto ? 'text-green-700' : 'text-red-600'}`}>
-            {dotacion.numeroPersonasAsignadas}/{dotacion.personalMinimo}
+            👤 {dotacion.numeroPersonasAsignadas}/{dotacion.personalMinimo}
           </span>
         </div>
         <p className="text-xs text-slate-500 mb-1">{TIPO_LABELS[dotacion.tipo] ?? dotacion.tipo}</p>
         <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full ${pillClase}`}>
           {pillTexto}
         </span>
-        {responsablesCompacto.length > 0 && (
-          <div className="border-t border-slate-200 pt-1 mt-2 space-y-0.5">
-            {responsablesCompacto.map((r) => (
-              <div key={r.id}>
-                <div className="text-xs text-slate-700 truncate" title={r.nombreCompleto}>
-                  {r.nombreCompleto}
-                </div>
-                {r.telefono && (
-                  <div className="text-[10px] text-slate-400">📞 {r.telefono}</div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
         {botonLiberar && <div className="mt-2">{botonLiberar}</div>}
       </div>
     );
   }
 
-  // NORMAL — código, indicativo, tipo, pill, cobertura, personal máx 3, footer
-  if (modo === 'normal') {
-    return (
-      <div
-        onClick={navegarBody}
-        className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-3 cursor-pointer hover:ring-2 ${enIntervencion ? 'hover:ring-red-300' : 'hover:ring-slate-300'}`}
-      >
-        <div className="flex items-start justify-between mb-1">
-          <div className="min-w-0 flex-1">
-            <span className="text-sm font-mono font-bold text-slate-900">{dotacion.codigo}</span>
-            {dotacion.indicativo && (
-              <span className="ml-1.5 text-xs text-slate-500 font-mono">{dotacion.indicativo}</span>
-            )}
-            <p className="text-xs text-slate-500 mt-0.5">{TIPO_LABELS[dotacion.tipo] ?? dotacion.tipo}</p>
-          </div>
-          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${pillClase}`}>
-            {pillTexto}
-          </span>
-        </div>
-        <div className="flex items-center gap-2 text-xs mb-1">
-          <span className={`font-semibold ${personalCubierto ? 'text-green-700' : 'text-red-600'}`}>
-            👤 {dotacion.numeroPersonasAsignadas}/{dotacion.personalMinimo}
-          </span>
-        </div>
-        {dotacion.personal.length > 0 && (
-          <div className="border-t border-slate-200 pt-1 mt-1 space-y-0.5">
-            {dotacion.personal.slice(0, 3).map((p) => (
-              <div key={p.id}>
-                <div className="text-xs text-slate-700 truncate" title={p.nombreCompleto}>
-                  {p.nombreCompleto}
-                </div>
-                {(p === responsable || p === responsable2) && p.telefono && (
-                  <div className="text-[10px] text-slate-400">📞 {p.telefono}</div>
-                )}
-              </div>
-            ))}
-            {dotacion.personal.length > 3 && (
-              <div className="text-xs text-slate-400">+{dotacion.personal.length - 3} más…</div>
-            )}
-          </div>
-        )}
-        {enIntervencion && intervencionActiva ? (
-          <button onClick={navegarPieActiva} className="block w-full text-left text-xs text-red-700 mt-2 font-medium hover:underline">
-            Ver intervención activa (#{intervencionActiva.numeroIntervencion}) →
-          </button>
-        ) : (
-          <button onClick={navegarPieHistorial} className="block w-full text-left text-xs text-slate-400 mt-2 hover:underline">
-            Ver historial →
-          </button>
-        )}
-        {botonLiberar && <div className="mt-2">{botonLiberar}</div>}
-      </div>
-    );
-  }
-
-  // AMPLIO — todo
+  // NORMAL — versión completa para 2/4 columnas: todo el detalle operativo.
+  // Personal completo (sin truncar), rol de cada persona, teléfono para
+  // responsables 1 y 2, footer con enlace a intervención/historial.
   return (
     <div
       onClick={navegarBody}
-      className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-4 cursor-pointer hover:ring-2 ${enIntervencion ? 'hover:ring-red-300' : 'hover:ring-slate-300'}`}
+      className={`rounded-lg border-2 ${CARD_STYLES[dotacion.estado]} p-3 cursor-pointer hover:ring-2 ${enIntervencion ? 'hover:ring-red-300' : 'hover:ring-slate-300'}`}
     >
-      <div className="flex items-start justify-between mb-2">
-        <div>
-          <span className="text-lg font-bold font-mono text-slate-900">{dotacion.codigo}</span>
+      <div className="flex items-start justify-between mb-1">
+        <div className="min-w-0 flex-1">
+          <span className="text-sm font-mono font-bold text-slate-900">{dotacion.codigo}</span>
           {dotacion.indicativo && (
-            <span className="ml-2 text-xs text-slate-500 font-mono">{dotacion.indicativo}</span>
+            <span className="ml-1.5 text-xs text-slate-500 font-mono">{dotacion.indicativo}</span>
           )}
           <p className="text-xs text-slate-500 mt-0.5">{TIPO_LABELS[dotacion.tipo] ?? dotacion.tipo}</p>
         </div>
-        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${pillClase}`}>
+        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${pillClase}`}>
           {pillTexto}
         </span>
       </div>
-      <div className="flex items-center gap-2 mb-2">
-        <span className={`text-sm font-semibold ${personalCubierto ? 'text-green-700' : 'text-red-600'}`}>
+      <div className="flex items-center gap-2 text-xs mb-1">
+        <span className={`font-semibold ${personalCubierto ? 'text-green-700' : 'text-red-600'}`}>
           👤 {dotacion.numeroPersonasAsignadas}/{dotacion.personalMinimo}
         </span>
-        {!personalCubierto && <span className="text-xs text-red-500">Personal insuficiente</span>}
       </div>
-      {dotacion.posicion && (
-        <p className="text-xs text-slate-500 mb-2">
-          📍 {dotacion.posicion.nombre}{dotacion.posicion.sector && ` · ${dotacion.posicion.sector}`}
-        </p>
-      )}
-      {dotacion.personal.length > 0 ? (
-        <div className="border-t border-slate-200 pt-2 mt-2 space-y-1">
+      {dotacion.personal.length > 0 && (
+        <div className="border-t border-slate-200 pt-1 mt-1 space-y-0.5">
           {dotacion.personal.map((p) => (
             <div key={p.id}>
-              <div className="flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${p.tipo === 'FACULTATIVO' ? 'bg-purple-500' : 'bg-blue-500'}`} />
-                <span className="text-xs text-slate-700 truncate" title={p.nombreCompleto}>{p.nombreCompleto}</span>
-                <span className="text-xs text-slate-400 truncate">· {p.rolEnDotacion}</span>
+              <div className="flex items-baseline gap-1.5 min-w-0">
+                <span className="text-xs text-slate-700 truncate" title={p.nombreCompleto}>
+                  {p.nombreCompleto}
+                </span>
+                {p.rolEnDotacion && (
+                  <span className="text-[10px] text-slate-400 truncate">· {p.rolEnDotacion}</span>
+                )}
               </div>
-              {p === responsable && p.telefono && (
-                <div className="text-[10px] text-slate-400 ml-3">📞 {p.telefono}</div>
+              {(p === responsable || p === responsable2) && p.telefono && (
+                <div className="text-[10px] text-slate-400">📞 {p.telefono}</div>
               )}
             </div>
           ))}
         </div>
-      ) : (
-        <p className="text-xs text-slate-400 italic mt-1">Sin personal asignado</p>
       )}
       {enIntervencion && intervencionActiva ? (
         <button onClick={navegarPieActiva} className="block w-full text-left text-xs text-red-700 mt-2 font-medium hover:underline">
@@ -689,6 +564,30 @@ function UCOContent() {
   // vuelve a tener éxito. No reemplaza al error de carga inicial — el polling NO
   // debe pintar el banner rojo, solo loguear y marcar este flag.
   const [sinConexion, setSinConexion] = useState(false);
+
+  // Nº de columnas del grid de dotaciones (2/4/6/8). El default es 4 y se
+  // rehidrata desde localStorage en el effect de más abajo — no en el lazy
+  // initializer del useState porque el server no tiene window.
+  const [numColumnas, setNumColumnas] = useState<NumColumnas>(4);
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(LOCALSTORAGE_KEY_COLUMNAS);
+      const n = saved !== null ? parseInt(saved, 10) : NaN;
+      if ((COLUMN_OPTIONS as readonly number[]).includes(n)) {
+        setNumColumnas(n as NumColumnas);
+      }
+    } catch {
+      // localStorage no disponible (Safari private, iframe restringido) — ignorar
+    }
+  }, []);
+  function seleccionarColumnas(n: NumColumnas) {
+    setNumColumnas(n);
+    try {
+      window.localStorage.setItem(LOCALSTORAGE_KEY_COLUMNAS, String(n));
+    } catch {
+      // ignorar
+    }
+  }
 
   const fetchEstado = useCallback(async (esPolling = false) => {
     if (!eventoSeleccionado) return;
@@ -980,7 +879,7 @@ function UCOContent() {
     ? new Date(estadoUCO.actualizadoEn).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : null;
   const numDotaciones = estadoUCO?.dotaciones.length ?? 0;
-  const modoTarjeta: ModoTarjeta = calcularModo(numDotaciones);
+  const modoTarjeta: ModoTarjeta = calcularModo(numColumnas);
 
   function urlIntervenciones(filtro?: string) {
     const params = new URLSearchParams();
@@ -1247,11 +1146,28 @@ function UCOContent() {
               Estado de dotaciones ({numDotaciones})
             </span>
             <div className="flex-1 border-t border-slate-300" />
+            <div className="flex items-center gap-1 whitespace-nowrap" role="group" aria-label="Columnas del grid de dotaciones">
+              {COLUMN_OPTIONS.map((n) => (
+                <button
+                  key={n}
+                  onClick={() => seleccionarColumnas(n)}
+                  aria-pressed={numColumnas === n}
+                  title={`Mostrar ${n} dotaciones por fila`}
+                  className={`text-[10px] font-medium px-2 py-0.5 rounded transition-colors ${
+                    numColumnas === n
+                      ? 'bg-slate-700 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {n} col
+                </button>
+              ))}
+            </div>
           </div>
               {estadoUCO.dotaciones.length === 0 ? (
                 <div className="text-center py-12 text-slate-400">No hay dotaciones activas para este evento.</div>
               ) : (
-                <div className={GRID_CLASSES[modoTarjeta]}>
+                <div className={GRID_BY_COLS[numColumnas]}>
                   {estadoUCO.dotaciones.map((dotacion) => {
                     const i = intervencionActivaPorDotacion.get(dotacion.id);
                     return (
