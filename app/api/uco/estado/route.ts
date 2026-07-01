@@ -67,11 +67,16 @@ export async function GET(
             personalMinimo: true,
             indicativo: true,
             posicion: { select: { id: true, nombre: true, sector: true } },
-            personal: {
+            // Personal asignado por plaza (PlazaDotacion). La tabla vieja
+            // AsignacionPersonalDotacion quedó desalineada cuando la pantalla
+            // de Asignación pasó a escribir en plazas.
+            plazas: {
+              where: { personaId: { not: null } },
               select: {
-                rolEnDotacion: true,
+                rolRequerido: true,
                 persona: { select: { id: true, nombreCompleto: true, tipo: true, telefono: true } },
               },
+              orderBy: { numero: 'asc' },
             },
           },
           orderBy: { codigo: 'asc' },
@@ -90,23 +95,29 @@ export async function GET(
       prisma.intervencion.count({ where: { eventoId, altaEnLugar: true } }),
     ]);
 
-    const dotaciones: DotacionEstado[] = evento.dotaciones.map((d) => ({
-      id: d.id,
-      codigo: d.codigo,
-      tipo: d.tipo as DotacionEstado['tipo'],
-      estado: d.estado as DotacionEstado['estado'],
-      personalMinimo: d.personalMinimo,
-      numeroPersonasAsignadas: d.personal.length,
-      indicativo: d.indicativo,
-      posicion: d.posicion ?? null,
-      personal: d.personal.map((a) => ({
-        id: a.persona.id,
-        nombreCompleto: a.persona.nombreCompleto,
-        rolEnDotacion: a.rolEnDotacion,
-        tipo: a.persona.tipo as 'VOLUNTARIO' | 'FACULTATIVO',
-        telefono: a.persona.telefono,
-      })),
-    }));
+    const dotaciones: DotacionEstado[] = evento.dotaciones.map((d) => {
+      // El where personaId:not-null ya elimina plazas vacías, pero Prisma tipa
+      // la relación como opcional. Type guard local para no usar `as`.
+      type PlazaConPersona = (typeof d.plazas)[number] & { persona: NonNullable<(typeof d.plazas)[number]['persona']> };
+      const plazasConPersona = d.plazas.filter((p): p is PlazaConPersona => p.persona !== null);
+      return {
+        id: d.id,
+        codigo: d.codigo,
+        tipo: d.tipo as DotacionEstado['tipo'],
+        estado: d.estado as DotacionEstado['estado'],
+        personalMinimo: d.personalMinimo,
+        numeroPersonasAsignadas: plazasConPersona.length,
+        indicativo: d.indicativo,
+        posicion: d.posicion ?? null,
+        personal: plazasConPersona.map((p) => ({
+          id: p.persona.id,
+          nombreCompleto: p.persona.nombreCompleto,
+          rolEnDotacion: p.rolRequerido ?? '',
+          tipo: p.persona.tipo as 'VOLUNTARIO' | 'FACULTATIVO',
+          telefono: p.persona.telefono,
+        })),
+      };
+    });
 
     const resumen = {
       disponibles: dotaciones.filter((d) => d.estado === 'CL0_DISPONIBLE').length,
