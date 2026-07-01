@@ -545,16 +545,19 @@ async function main() {
     }
 
     const emailCounter = new Map<string, number>();
-    for (const f of lista) {
+    for (let i = 0; i < lista.length; i++) {
+      const f = lista[i];
       const key = slug(f.nombre);
       const idx = (emailCounter.get(key) ?? 0) + 1;
       emailCounter.set(key, idx);
       const email = `${key}${idx}@drp-test.com`;
+      // Teléfono único por persona: 600000001..600000067
+      const telefono = `6${String(i + 1).padStart(8, '0')}`;
       await prisma.persona.upsert({
         where: { email },
         update: {
           nombreCompleto: `${f.nombre} ${f.apellidos}`,
-          telefono: '666666666',
+          telefono,
           tipo: tipoPersona(f.puesto),
           titulacionId: titulacionId(f.puesto),
           activo: true,
@@ -562,7 +565,7 @@ async function main() {
         create: {
           email,
           nombreCompleto: `${f.nombre} ${f.apellidos}`,
-          telefono: '666666666',
+          telefono,
           tipo: tipoPersona(f.puesto),
           titulacionId: titulacionId(f.puesto),
           activo: true,

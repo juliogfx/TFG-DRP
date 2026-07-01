@@ -60,6 +60,9 @@ interface FilaAsist {
 
 const INCORPORACIONES = ['PLANTIO', 'SERVICIO', 'B85'];
 
+type SaveState = 'saving' | 'ok' | 'err';
+type CampoGuardable = 'contar' | 'acron' | 'incorporacion' | 'observaciones';
+
 function acronDefaultDeTitulacion(titulacion: string | null): string {
   if (!titulacion) return '';
   const t = titulacion.toLowerCase();
@@ -75,9 +78,29 @@ function acronDefaultDeTitulacion(titulacion: string | null): string {
   return '';
 }
 
+/**
+ * Orden natural para nombres tipo "BANQ.-1", "UVI1-3", "CAMNOR-2":
+ * compara prefijo (dotación) alfabéticamente y luego el número al final.
+ */
+function comparePlazaNombre(a: string, b: string): number {
+  const parse = (s: string): { prefix: string; num: number } => {
+    const idx = s.lastIndexOf('-');
+    if (idx < 0) return { prefix: s, num: 0 };
+    const num = parseInt(s.slice(idx + 1), 10);
+    return { prefix: s.slice(0, idx), num: isNaN(num) ? 0 : num };
+  };
+  const pa = parse(a);
+  const pb = parse(b);
+  const cmp = pa.prefix.localeCompare(pb.prefix, 'es');
+  if (cmp !== 0) return cmp;
+  return pa.num - pb.num;
+}
+
 export default function AsignacionPage() {
-  const params = useParams<{ id: string }>();
-  const eventoId = Number(params.id);
+  const params = useParams<{ id: string | string[] }>();
+  const rawId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const eventoId = rawId ? parseInt(rawId, 10) : NaN;
+  const eventoIdValido = !isNaN(eventoId) && eventoId > 0;
 
   const [grupos, setGrupos] = useState<GrupoApi[]>([]);
   const [personas, setPersonas] = useState<PersonaApi[]>([]);
@@ -85,13 +108,14 @@ export default function AsignacionPage() {
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saveStates, setSaveStates] = useState<Record<string, SaveState>>({});
 
   const [filtroDot, setFiltroDot] = useState<string>('TODAS');
   const [filtroPuesto, setFiltroPuesto] = useState<string>('TODOS');
   const [buscador, setBuscador] = useState<string>('');
 
   const cargar = useCallback(async () => {
-    if (!eventoId) return;
+    if (!eventoIdValido) return;
     setCargando(true);
     setError(null);
     try {
@@ -114,9 +138,25 @@ export default function AsignacionPage() {
     } finally {
       setCargando(false);
     }
-  }, [eventoId]);
+  }, [eventoId, eventoIdValido]);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  /** Marca el estado de guardado de un campo y auto-limpia tras 2s si es 'ok'. */
+  function marcarEstado(plazaId: number, campo: CampoGuardable, state: SaveState) {
+    const key = `${plazaId}:${campo}`;
+    setSaveStates((prev) => ({ ...prev, [key]: state }));
+    if (state === 'ok' || state === 'err') {
+      setTimeout(() => {
+        setSaveStates((prev) => {
+          if (prev[key] !== state) return prev;
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      }, state === 'ok' ? 2000 : 4000);
+    }
+  }
 
   const plazaPorPersona = useMemo(() => {
     const map = new Map<number, { plaza: PlazaApi; dotacionId: number }>();
@@ -135,7 +175,7 @@ export default function AsignacionPage() {
         if (!p.persona) libres.push({ plaza: p, dotacionId: g.dotacion.id, dotacionCodigo: g.dotacion.codigo });
       }
     }
-    return libres;
+    return libres.sort((a, b) => comparePlazaNombre(a.plaza.nombre, b.plaza.nombre));
   }, [grupos]);
 
   const filasBase: FilaAsist[] = useMemo(() => {
@@ -164,11 +204,15 @@ export default function AsignacionPage() {
         observaciones: null,
       };
     });
-    // Asignados primero (por puesto), luego libres (por puesto)
+    // 1) Asignados primero, ordenados por nombre de plaza (BANQ.-1, BANQ.-2, CAMNOR-1…).
+    // 2) Libres al final, por puesto y luego nombre.
     return filas.sort((a, b) => {
       const asigA = a.plazaId !== null ? 0 : 1;
       const asigB = b.plazaId !== null ? 0 : 1;
       if (asigA !== asigB) return asigA - asigB;
+      if (a.plazaId !== null && b.plazaId !== null) {
+        return comparePlazaNombre(a.plazaNombre ?? '', b.plazaNombre ?? '');
+      }
       const puestoA = a.persona.titulacion ?? 'zzz';
       const puestoB = b.persona.titulacion ?? 'zzz';
       const cmp = puestoA.localeCompare(puestoB, 'es');
@@ -210,6 +254,10 @@ export default function AsignacionPage() {
   /**
    * PUT a una plaza actualizando alguno de sus campos. Guardado inmediato:
    * al terminar recarga los datos para tener el estado consistente.
+   *
+   * `campoIndicador` (opcional) hace que se muestre el badge ✓/✗ junto al
+   * input correspondiente. Los cambios de asignación (personaId) no usan
+   * indicador porque se refleja visualmente en el propio selector.
    */
   async function actualizarPlaza(
     dotacionId: number,
@@ -220,10 +268,12 @@ export default function AsignacionPage() {
       contar?: boolean;
       acron?: string | null;
       observaciones?: string | null;
-    }
+    },
+    campoIndicador?: CampoGuardable,
   ): Promise<boolean> {
     setGuardando(plazaId);
     setError(null);
+    if (campoIndicador) marcarEstado(plazaId, campoIndicador, 'saving');
     try {
       const res = await fetch(`/api/dotaciones/${dotacionId}/plazas/${plazaId}`, {
         method: 'PUT',
@@ -232,13 +282,25 @@ export default function AsignacionPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
+      if (campoIndicador) marcarEstado(plazaId, campoIndicador, 'ok');
       return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al actualizar');
+      if (campoIndicador) marcarEstado(plazaId, campoIndicador, 'err');
       return false;
     } finally {
       setGuardando(null);
     }
+  }
+
+  /** Renderiza el badge ✓ (verde) / ✗ (rojo) / spinner al lado del input. */
+  function badgeGuardado(plazaId: number | null, campo: CampoGuardable) {
+    if (plazaId === null) return null;
+    const state = saveStates[`${plazaId}:${campo}`];
+    if (!state) return null;
+    if (state === 'saving') return <span className="ml-1 text-slate-400 text-xs">…</span>;
+    if (state === 'ok') return <span className="ml-1 text-emerald-600 text-xs font-bold">✓</span>;
+    return <span className="ml-1 text-red-600 text-xs font-bold" title="Error al guardar">✗</span>;
   }
 
   /** Cambia la asignación de una persona a una plaza distinta (o la libera). */
@@ -263,6 +325,19 @@ export default function AsignacionPage() {
       });
     }
     await cargar();
+  }
+
+  if (!eventoIdValido) {
+    return (
+      <div>
+        <div className="mb-4">
+          <Link href="/eventos" className="text-sm text-slate-500 hover:text-slate-700">← Volver a eventos</Link>
+        </div>
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+          ID de evento inválido en la URL ({rawId ?? 'vacío'}). Vuelve al listado y usa el botón "Asignación" de un evento concreto.
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -380,19 +455,20 @@ export default function AsignacionPage() {
                         ))}
                       </select>
                     </td>
-                    <td className="px-2 py-1.5 text-center">
+                    <td className="px-2 py-1.5 text-center whitespace-nowrap">
                       <input
                         type="checkbox"
                         checked={f.contar}
                         disabled={disabled}
                         onChange={(e) => {
                           if (!asignada || f.dotacionId === null || f.plazaId === null) return;
-                          actualizarPlaza(f.dotacionId, f.plazaId, { contar: e.target.checked })
+                          actualizarPlaza(f.dotacionId, f.plazaId, { contar: e.target.checked }, 'contar')
                             .then((ok) => { if (ok) cargar(); });
                         }}
                       />
+                      {badgeGuardado(f.plazaId, 'contar')}
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-2 py-1.5 whitespace-nowrap">
                       <input
                         type="text"
                         maxLength={10}
@@ -409,18 +485,19 @@ export default function AsignacionPage() {
                         onBlur={(e) => {
                           if (!asignada || f.dotacionId === null || f.plazaId === null) return;
                           const val = e.target.value.trim().toUpperCase();
-                          actualizarPlaza(f.dotacionId, f.plazaId, { acron: val || null });
+                          actualizarPlaza(f.dotacionId, f.plazaId, { acron: val || null }, 'acron');
                         }}
                         className="w-16 border border-slate-300 rounded px-1 py-0.5 text-xs text-center uppercase disabled:bg-slate-100 disabled:text-slate-400"
                       />
+                      {badgeGuardado(f.plazaId, 'acron')}
                     </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-2 py-1.5 whitespace-nowrap">
                       <select
                         value={f.incorporacion ?? ''}
                         disabled={disabled}
                         onChange={(e) => {
                           if (!asignada || f.dotacionId === null || f.plazaId === null) return;
-                          actualizarPlaza(f.dotacionId, f.plazaId, { incorporacion: e.target.value || null })
+                          actualizarPlaza(f.dotacionId, f.plazaId, { incorporacion: e.target.value || null }, 'incorporacion')
                             .then((ok) => { if (ok) cargar(); });
                         }}
                         className="w-full border border-slate-300 rounded px-1 py-0.5 text-xs disabled:bg-slate-100 disabled:text-slate-400"
@@ -428,6 +505,7 @@ export default function AsignacionPage() {
                         <option value="">—</option>
                         {INCORPORACIONES.map((i) => <option key={i} value={i}>{i}</option>)}
                       </select>
+                      {badgeGuardado(f.plazaId, 'incorporacion')}
                     </td>
                     <td className="px-3 py-1.5 font-medium text-slate-800">
                       {f.persona.nombreCompleto}
@@ -437,7 +515,7 @@ export default function AsignacionPage() {
                     </td>
                     <td className="px-3 py-1.5 text-slate-600 tabular-nums">{f.persona.telefono ?? '—'}</td>
                     <td className="px-3 py-1.5 text-slate-600">{f.persona.titulacion ?? '—'}</td>
-                    <td className="px-3 py-1.5">
+                    <td className="px-3 py-1.5 whitespace-nowrap">
                       <input
                         type="text"
                         value={f.observaciones ?? ''}
@@ -451,11 +529,12 @@ export default function AsignacionPage() {
                         }}
                         onBlur={(e) => {
                           if (!asignada || f.dotacionId === null || f.plazaId === null) return;
-                          actualizarPlaza(f.dotacionId, f.plazaId, { observaciones: e.target.value || null });
+                          actualizarPlaza(f.dotacionId, f.plazaId, { observaciones: e.target.value || null }, 'observaciones');
                         }}
                         maxLength={200}
-                        className="w-full border border-slate-300 rounded px-1 py-0.5 text-xs disabled:bg-slate-100"
+                        className="w-56 border border-slate-300 rounded px-1 py-0.5 text-xs disabled:bg-slate-100"
                       />
+                      {badgeGuardado(f.plazaId, 'observaciones')}
                     </td>
                   </tr>
                 );
