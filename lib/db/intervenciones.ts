@@ -231,6 +231,10 @@ export async function updateIntervencion(
   }
 
   const cerrando = input.resolucion !== undefined && input.resolucion !== null && input.horaFinal;
+  // Solo liberamos dotaciones en la TRANSICIÓN a CERRADA. Si la intervención
+  // ya estaba cerrada, no tocamos: podría haberse reasignado la dotación a
+  // otra intervención posterior y no queremos arrastrarla a CL0.
+  const cerrandoAhora = cerrando && actual.estado !== 'CERRADA';
 
   const dotacionAnteriorId = actual.dotacionActivaId;
   const dotacionPropuestaId = input.dotacionActivaId;
@@ -288,6 +292,25 @@ export async function updateIntervencion(
         await tx.dotacion.update({
           where: { id: apoyoPropuestoId },
           data: { estado: 'CL1_EN_CAMINO' },
+        });
+      }
+    }
+
+    // Cierre de la intervención: liberamos las dotaciones asociadas a CL0
+    // sin importar en qué CL estén (CL1 si nunca llegaron, CL2 si estaban
+    // en el lugar). Los guards evitan chocar con las ramas de cambio de
+    // dotación arriba, que ya han puesto la anterior en CL0.
+    if (cerrandoAhora) {
+      if (dotacionAnteriorId && !cambioDotacion) {
+        await tx.dotacion.update({
+          where: { id: dotacionAnteriorId },
+          data: { estado: 'CL0_DISPONIBLE' },
+        });
+      }
+      if (apoyoAnteriorId && !cambioApoyo) {
+        await tx.dotacion.update({
+          where: { id: apoyoAnteriorId },
+          data: { estado: 'CL0_DISPONIBLE' },
         });
       }
     }
