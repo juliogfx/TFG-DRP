@@ -6,8 +6,9 @@
  * Muestra el estado de todas las dotaciones, contadores clicables y
  * tabla de intervenciones EN CURSO, con actualización automática cada 30s.
  *
- * Tarjetas de dotación con tamaño adaptativo según total de dotaciones:
- *   ≤8 = amplio | ≤16 = normal | ≤24 = compacto | ≤35 = mini | >35 = micro
+ * Tarjetas de dotación siempre 4 por fila:
+ *   ≤16 dotaciones = normal (nombres + teléfonos)
+ *   >16 dotaciones  = compacto (info condensada + responsables)
  *
  * Para gestión completa de intervenciones navegar a /uco/intervenciones.
  */
@@ -96,12 +97,14 @@ const GRAVEDAD_STYLES: Record<string, string> = {
   CRITICA:  'bg-red-100 text-red-700',
 };
 
+// Siempre 4 columnas — el modo (normal|compacto) solo cambia el contenido
+// interno de la tarjeta, no la disposición del grid.
 const GRID_CLASSES: Record<ModoTarjeta, string> = {
-  amplio:   'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4',
-  normal:   'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3',
-  compacto: 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-3',
-  mini:     'grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2',
-  micro:    'grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-8 xl:grid-cols-10 gap-2',
+  amplio:   'grid grid-cols-4 gap-4',
+  normal:   'grid grid-cols-4 gap-3',
+  compacto: 'grid grid-cols-4 gap-3',
+  mini:     'grid grid-cols-4 gap-2',
+  micro:    'grid grid-cols-4 gap-2',
 };
 
 const FORM_INTERVENCION_INICIAL = {
@@ -128,11 +131,7 @@ const RESOLUCION_LABEL: Record<ResolucionIntervencion, string> = {
 const POLLING_INTERVAL_MS = 30_000;
 
 function calcularModo(numDotaciones: number): ModoTarjeta {
-  if (numDotaciones <= 8) return 'amplio';
-  if (numDotaciones <= 16) return 'normal';
-  if (numDotaciones <= 24) return 'compacto';
-  if (numDotaciones <= 35) return 'mini';
-  return 'micro';
+  return numDotaciones <= 16 ? 'normal' : 'compacto';
 }
 
 interface ClinicaOpcion { id: number; nombre: string; sector: string | null }
@@ -252,6 +251,12 @@ function TarjetaDotacion({
     dotacion.personal.find((p) => /responsable/i.test(p.rolEnDotacion)) ??
     dotacion.personal[0] ??
     null;
+  // Segundo responsable: rol que contenga "segundo", o el primero disponible
+  // que no sea el responsable principal. null si la dotación tiene ≤1 persona.
+  const responsable2 =
+    dotacion.personal.find((p) => /segundo/i.test(p.rolEnDotacion) && p !== responsable) ??
+    dotacion.personal.find((p) => p !== responsable) ??
+    null;
 
   // Click en el cuerpo: SIEMPRE intervenciones filtradas por esa dotación, sin
   // filtro de estado. Para la intervención activa concreta se usa el enlace
@@ -334,8 +339,11 @@ function TarjetaDotacion({
     );
   }
 
-  // COMPACTO — código + tipo + pill + cobertura número
+  // COMPACTO — código + tipo + pill + cobertura número + responsables 1 y 2
   if (modo === 'compacto') {
+    const responsablesCompacto = [responsable, responsable2].filter(
+      (r): r is NonNullable<typeof r> => r !== null,
+    );
     return (
       <div
         onClick={navegarBody}
@@ -352,6 +360,20 @@ function TarjetaDotacion({
         <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full ${pillClase}`}>
           {pillTexto}
         </span>
+        {responsablesCompacto.length > 0 && (
+          <div className="border-t border-slate-200 pt-1 mt-2 space-y-0.5">
+            {responsablesCompacto.map((r) => (
+              <div key={r.id}>
+                <div className="text-xs text-slate-700 truncate" title={r.nombreCompleto}>
+                  {r.nombreCompleto}
+                </div>
+                {r.telefono && (
+                  <div className="text-[10px] text-slate-400">📞 {r.telefono}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         {botonLiberar && <div className="mt-2">{botonLiberar}</div>}
       </div>
     );
@@ -388,7 +410,7 @@ function TarjetaDotacion({
                 <div className="text-xs text-slate-700 truncate" title={p.nombreCompleto}>
                   {p.nombreCompleto}
                 </div>
-                {p === responsable && p.telefono && (
+                {(p === responsable || p === responsable2) && p.telefono && (
                   <div className="text-[10px] text-slate-400">📞 {p.telefono}</div>
                 )}
               </div>
