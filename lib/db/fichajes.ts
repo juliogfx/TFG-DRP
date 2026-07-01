@@ -2,15 +2,19 @@
  * @file lib/db/fichajes.ts
  * @description Acceso a BD para el módulo de Fichajes (F1.5).
  *
- * Convierte filas de AsignacionPersonalDotacion en FichajeItem,
- * añadiendo los campos derivados (acreditado, llegadaTardia, etc.)
- * que la pantalla de fichajes necesita.
+ * Fuente de datos: PlazaDotacion (asignación por plaza, "Opción B").
+ * Sustituye a la lectura de AsignacionPersonalDotacion que quedó
+ * desincronizada cuando la pantalla de Asignación pasó a escribir en
+ * PlazaDotacion. El `asignacionId` que ve la UI es en realidad el `id`
+ * de la plaza — se mantiene el nombre por compatibilidad con el endpoint.
+ *
+ * Añade los campos derivados que la pantalla necesita (acreditado,
+ * llegadaTardia, etc.) y que no están persistidos en BD.
  */
 
 import { prisma } from '@/lib/db/prisma';
+import type { TipoDotacion } from '@prisma/client';
 import type { FichajeItem, TipoIncorporacion, UpdateFichajeInput } from '@/types/fichaje';
-
-const MARGEN_LLEGADA_MIN = 10; // minutos de gracia antes de marcar llegada tardía
 
 function diferenciaHoras(inicio: Date | null, fin: Date | null): number | null {
   if (!inicio || !fin) return null;
@@ -20,91 +24,124 @@ function diferenciaHoras(inicio: Date | null, fin: Date | null): number | null {
 }
 
 /**
- * Calcula el tipo de incorporación de una dotación en un evento.
- * Para el MVP usamos la heurística: las dotaciones cuyo tipo es
- * UCO_UNIT, CLINICA o BANQUILLO acuden a PLANTIO (anticipo de 30 min);
- * el resto SERVICIO (a hora inicio evento). Si esto cambia debe
- * persistirse como columna en Dotacion.
+ * Heurística por defecto: UCO/Clínicas/Banquillo entran a plantío (30 min
+ * antes). El resto a servicio. Se usa solo si la plaza no tiene su propio
+ * campo `incorporacion` con un valor válido.
  */
-function tipoIncorporacion(tipoDotacion: string): TipoIncorporacion {
+function tipoIncorporacionDeDotacion(tipoDotacion: TipoDotacion): TipoIncorporacion {
   return tipoDotacion === 'UCO_UNIT' || tipoDotacion === 'CLINICA' || tipoDotacion === 'BANQUILLO'
     ? 'PLANTIO'
     : 'SERVICIO';
 }
 
-function llegadaTardia(prev: Date | null, real: Date | null): boolean {
-  if (!prev || !real) return false;
-  return real.getTime() > prev.getTime() + MARGEN_LLEGADA_MIN * 60 * 1000;
+function resolverIncorporacion(plazaIncorporacion: string | null, tipoDotacion: TipoDotacion): TipoIncorporacion {
+  if (plazaIncorporacion === 'PLANTIO' || plazaIncorporacion === 'SERVICIO') return plazaIncorporacion;
+  return tipoIncorporacionDeDotacion(tipoDotacion);
 }
 
-function salidaTardia(prev: Date | null, real: Date | null): boolean {
-  if (!prev || !real) return false;
-  return real.getTime() > prev.getTime();
+const plazaSelect = {
+  id: true,
+  rolRequerido: true,
+  incorporacion: true,
+  observaciones: true,
+  asiste: true,
+  turnoInicioReal: true,
+  turnoFinReal: true,
+  dotacion: { select: { id: true, codigo: true, tipo: true } },
+  persona: {
+    select: {
+      id: true,
+      nombreCompleto: true,
+      telefono: true,
+      acreditacion: true,
+      titulacion: { select: { nombre: true } },
+    },
+  },
+} as const;
+
+type PlazaConPersona = {
+  id: number;
+  rolRequerido: string | null;
+  incorporacion: string | null;
+  observaciones: string | null;
+  asiste: boolean | null;
+  turnoInicioReal: Date | null;
+  turnoFinReal: Date | null;
+  dotacion: { id: number; codigo: string; tipo: TipoDotacion };
+  persona: {
+    id: number;
+    nombreCompleto: string;
+    telefono: string | null;
+    acreditacion: string | null;
+    titulacion: { nombre: string } | null;
+  };
+};
+
+function serializarPlaza(p: PlazaConPersona): FichajeItem {
+  const puesto = p.rolRequerido ?? p.persona.titulacion?.nombre ?? '';
+  return {
+    asignacionId: p.id,
+    personaId: p.persona.id,
+    nombreCompleto: p.persona.nombreCompleto,
+    telefono: p.persona.telefono,
+    puesto,
+    dotacionId: p.dotacion.id,
+    dotacionCodigo: p.dotacion.codigo,
+    // Mientras la plaza tenga persona asignada consideramos que está en el
+    // listado de plantío. Cuando F1.5 formalice el listado, este flag
+    // pasará a leerse de otro campo.
+    listadoPlantio: true,
+    incorporacion: resolverIncorporacion(p.incorporacion, p.dotacion.tipo),
+    asiste: p.asiste,
+    // PlazaDotacion no persiste horario previsto — se dejaría para F1.5.2.
+    // Sin previsto no hay forma de calcular tardanza, así que ambos flags
+    // van a false para no dar falsos positivos.
+    turnoInicioPrev: null,
+    turnoFinPrev: null,
+    turnoInicioReal: p.turnoInicioReal?.toISOString() ?? null,
+    turnoFinReal: p.turnoFinReal?.toISOString() ?? null,
+    observaciones: p.observaciones,
+    acreditado: p.persona.acreditacion != null && p.persona.acreditacion.trim() !== '',
+    faltaPrevia: !!p.observaciones && /falta previa/i.test(p.observaciones),
+    llegadaTardia: false,
+    salidaTardia: false,
+    horas: diferenciaHoras(p.turnoInicioReal, p.turnoFinReal),
+  };
 }
 
 export async function getFichajesByEvento(eventoId: number): Promise<FichajeItem[]> {
-  const asignaciones = await prisma.asignacionPersonalDotacion.findMany({
-    where: { dotacion: { eventoId } },
-    select: {
-      id: true,
-      rolEnDotacion: true,
-      turnoInicioPrev: true,
-      turnoFinPrev: true,
-      asiste: true,
-      turnoInicioReal: true,
-      turnoFinReal: true,
-      observaciones: true,
-      dotacion: { select: { id: true, codigo: true, tipo: true } },
-      persona: { select: { id: true, nombreCompleto: true, telefono: true, acreditacion: true } },
-    },
+  const plazas = await prisma.plazaDotacion.findMany({
+    where: { dotacion: { eventoId }, personaId: { not: null } },
+    select: plazaSelect,
     orderBy: [
       { dotacion: { codigo: 'asc' } },
-      { persona: { nombreCompleto: 'asc' } },
+      { numero: 'asc' },
     ],
   });
 
-  return asignaciones.map((a): FichajeItem => ({
-    asignacionId: a.id,
-    personaId: a.persona.id,
-    nombreCompleto: a.persona.nombreCompleto,
-    telefono: a.persona.telefono,
-    puesto: a.rolEnDotacion,
-    dotacionId: a.dotacion.id,
-    dotacionCodigo: a.dotacion.codigo,
-    // Mientras la asignación exista en BD consideramos que la persona
-    // está en el listado de plantío. En el futuro se podría diferenciar
-    // con una columna explícita.
-    listadoPlantio: true,
-    incorporacion: tipoIncorporacion(a.dotacion.tipo),
-    asiste: a.asiste,
-    turnoInicioPrev: a.turnoInicioPrev?.toISOString() ?? null,
-    turnoFinPrev: a.turnoFinPrev?.toISOString() ?? null,
-    turnoInicioReal: a.turnoInicioReal?.toISOString() ?? null,
-    turnoFinReal: a.turnoFinReal?.toISOString() ?? null,
-    observaciones: a.observaciones,
-    acreditado: a.persona.acreditacion != null && a.persona.acreditacion.trim() !== '',
-    // "Falta previa" se marca textualmente en observaciones por ahora —
-    // si en el futuro hay columna dedicada, basta con cambiar la fuente.
-    faltaPrevia: !!a.observaciones && /falta previa/i.test(a.observaciones),
-    llegadaTardia: llegadaTardia(a.turnoInicioPrev, a.turnoInicioReal),
-    salidaTardia: salidaTardia(a.turnoFinPrev, a.turnoFinReal),
-    horas: diferenciaHoras(a.turnoInicioReal, a.turnoFinReal),
-  }));
+  // El where filtra personaId != null, pero Prisma aún tipa la relación como
+  // opcional. Este type guard convierte de forma segura sin `as`.
+  return plazas
+    .filter((p): p is PlazaConPersona => p.persona !== null)
+    .map(serializarPlaza);
 }
 
-export async function updateFichaje(asignacionId: number, input: UpdateFichajeInput): Promise<FichajeItem> {
-  const existe = await prisma.asignacionPersonalDotacion.findUnique({
-    where: { id: asignacionId },
-    select: { id: true },
+export async function updateFichaje(plazaId: number, input: UpdateFichajeInput): Promise<FichajeItem> {
+  const existe = await prisma.plazaDotacion.findUnique({
+    where: { id: plazaId },
+    select: { id: true, personaId: true },
   });
   if (!existe) {
-    const err: Error & { code?: string } = new Error(`No existe fichaje con id ${asignacionId}`);
+    const err: Error & { code?: string } = new Error(`No existe fichaje con id ${plazaId}`);
     err.code = 'P2025';
     throw err;
   }
+  if (existe.personaId === null) {
+    throw new Error(`La plaza ${plazaId} no tiene persona asignada — no se puede fichar.`);
+  }
 
-  await prisma.asignacionPersonalDotacion.update({
-    where: { id: asignacionId },
+  await prisma.plazaDotacion.update({
+    where: { id: plazaId },
     data: {
       ...(input.asiste !== undefined && { asiste: input.asiste }),
       ...(input.turnoInicioReal !== undefined && {
@@ -117,43 +154,12 @@ export async function updateFichaje(asignacionId: number, input: UpdateFichajeIn
     },
   });
 
-  // Devolvemos la fila reconstruida con todos los campos derivados.
-  const refrescada = await prisma.asignacionPersonalDotacion.findUniqueOrThrow({
-    where: { id: asignacionId },
-    select: {
-      id: true,
-      rolEnDotacion: true,
-      turnoInicioPrev: true,
-      turnoFinPrev: true,
-      asiste: true,
-      turnoInicioReal: true,
-      turnoFinReal: true,
-      observaciones: true,
-      dotacion: { select: { id: true, codigo: true, tipo: true } },
-      persona: { select: { id: true, nombreCompleto: true, telefono: true, acreditacion: true } },
-    },
+  const refrescada = await prisma.plazaDotacion.findUniqueOrThrow({
+    where: { id: plazaId },
+    select: plazaSelect,
   });
-
-  return {
-    asignacionId: refrescada.id,
-    personaId: refrescada.persona.id,
-    nombreCompleto: refrescada.persona.nombreCompleto,
-    telefono: refrescada.persona.telefono,
-    puesto: refrescada.rolEnDotacion,
-    dotacionId: refrescada.dotacion.id,
-    dotacionCodigo: refrescada.dotacion.codigo,
-    listadoPlantio: true,
-    incorporacion: tipoIncorporacion(refrescada.dotacion.tipo),
-    asiste: refrescada.asiste,
-    turnoInicioPrev: refrescada.turnoInicioPrev?.toISOString() ?? null,
-    turnoFinPrev: refrescada.turnoFinPrev?.toISOString() ?? null,
-    turnoInicioReal: refrescada.turnoInicioReal?.toISOString() ?? null,
-    turnoFinReal: refrescada.turnoFinReal?.toISOString() ?? null,
-    observaciones: refrescada.observaciones,
-    acreditado: refrescada.persona.acreditacion != null && refrescada.persona.acreditacion.trim() !== '',
-    faltaPrevia: !!refrescada.observaciones && /falta previa/i.test(refrescada.observaciones),
-    llegadaTardia: llegadaTardia(refrescada.turnoInicioPrev, refrescada.turnoInicioReal),
-    salidaTardia: salidaTardia(refrescada.turnoFinPrev, refrescada.turnoFinReal),
-    horas: diferenciaHoras(refrescada.turnoInicioReal, refrescada.turnoFinReal),
-  };
+  if (refrescada.persona === null) {
+    throw new Error(`La plaza ${plazaId} se quedó sin persona durante el update.`);
+  }
+  return serializarPlaza(refrescada as PlazaConPersona);
 }

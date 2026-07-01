@@ -526,6 +526,11 @@ model PlazaDotacion {
   /// Acrónimo de función (MED, ENF, TEC, SOC, CON, COO, PRA, OPE...)
   acron           String?   @db.VarChar(10)
   observaciones   String?   @db.Text
+  /// F1.5 — Fichajes (control de entrada/salida). asiste=null significa que
+  /// el UCO todavía no ha marcado presencia; true/false = ✅/FALTA.
+  asiste          Boolean?
+  turnoInicioReal DateTime? @map("turno_inicio_real")
+  turnoFinReal    DateTime? @map("turno_fin_real")
 
   dotacion        Dotacion  @relation(fields: [dotacionId], references: [id])
   persona         Persona?  @relation(fields: [personaId], references: [id])
