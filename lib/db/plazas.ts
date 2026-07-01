@@ -364,6 +364,8 @@ export async function confirmarDimensionamientoEvento(
   let dotacionesCreadas = 0;
   let plazasCreadas = 0;
 
+  // Timeout ampliado: 26 filas × (1 create dotacion + 1 createMany plazas) + 1
+  // executeRaw superan el timeout por defecto (5 s) contra el pooler de Supabase.
   await prisma.$transaction(async (tx) => {
     for (const f of filas) {
       const personalMinimo = f.med + f.due + f.cond + f.tec + f.socTec + f.otr;
@@ -373,10 +375,6 @@ export async function confirmarDimensionamientoEvento(
         await tx.dotacion.update({
           where: { id: idExistente },
           data: { personalMinimo },
-        });
-        await tx.dimensionamientoEvento.update({
-          where: { id: f.id },
-          data: { dotacionId: idExistente },
         });
         continue;
       }
@@ -399,24 +397,33 @@ export async function confirmarDimensionamientoEvento(
       dotacionesCreadas++;
 
       const { numPlazas, roles } = plantillaPlazasPorTipo(tipo);
-      for (let numero = 1; numero <= numPlazas; numero++) {
-        await tx.plazaDotacion.create({
-          data: {
-            dotacionId: nuevaDot.id,
-            numero,
-            nombre: `${f.nombre}-${numero}`,
-            rolRequerido: roles[numero] ?? null,
-          },
-        });
-        plazasCreadas++;
-      }
-
-      await tx.dimensionamientoEvento.update({
-        where: { id: f.id },
-        data: { dotacionId: nuevaDot.id },
+      const plazasData = Array.from({ length: numPlazas }, (_, i) => {
+        const numero = i + 1;
+        return {
+          dotacionId: nuevaDot.id,
+          numero,
+          nombre: `${f.nombre}-${numero}`,
+          rolRequerido: roles[numero] ?? null,
+        };
       });
+      await tx.plazaDotacion.createMany({ data: plazasData });
+      plazasCreadas += plazasData.length;
     }
-  });
+
+    // Una sola query enlaza cada fila incluida con su dotación por
+    // (eventoId, codigo == nombre). Sustituye a N updates individuales.
+    await tx.$executeRaw`
+      UPDATE dimensionamiento_evento d
+      SET dotacion_id = dot.id
+      FROM dotacion dot
+      WHERE d.evento_id = ${eventoId}
+        AND d.incluida = true
+        AND dot.evento_id = ${eventoId}
+        AND dot.codigo = d.nombre
+        AND dot.deleted_at IS NULL
+        AND (d.dotacion_id IS NULL OR d.dotacion_id <> dot.id)
+    `;
+  }, { timeout: 30_000, maxWait: 10_000 });
 
   return { dotacionesCreadas, plazasCreadas };
 }
