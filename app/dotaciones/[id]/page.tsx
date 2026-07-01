@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import type {
@@ -499,7 +499,7 @@ function PlazasSeccion({
   const [guardando, setGuardando] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const cargarPlazas = async () => {
+  const cargarPlazas = useCallback(async () => {
     setCargando(true);
     setError(null);
     try {
@@ -512,9 +512,9 @@ function PlazasSeccion({
     } finally {
       setCargando(false);
     }
-  };
+  }, [dotacionId]);
 
-  useEffect(() => { cargarPlazas(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [dotacionId]);
+  useEffect(() => { cargarPlazas(); }, [cargarPlazas]);
 
   async function actualizar(
     plazaId: number,

@@ -334,7 +334,7 @@ export default function AsignacionPage() {
           <Link href="/eventos" className="text-sm text-slate-500 hover:text-slate-700">← Volver a eventos</Link>
         </div>
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-          ID de evento inválido en la URL ({rawId ?? 'vacío'}). Vuelve al listado y usa el botón "Asignación" de un evento concreto.
+          ID de evento inválido en la URL ({rawId ?? 'vacío'}). Vuelve al listado y usa el botón &quot;Asignación&quot; de un evento concreto.
         </div>
       </div>
     );
