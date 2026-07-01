@@ -121,27 +121,36 @@ function serializarEventoLista(e: { id: number; nombre: string; fecha: Date }): 
   return { id: e.id, nombre: e.nombre, fecha: e.fecha.toISOString().substring(0, 10) };
 }
 
-/**
- * Obtiene todas las dotaciones activas de un evento específico.
- */
-export async function getDotacionesByEvento(eventoId: number): Promise<DotacionListItem[]> {
-  const dotaciones = await prisma.dotacion.findMany({
-    where: { eventoId, deletedAt: null },
-    select: {
-      id: true,
-      codigo: true,
-      tipo: true,
-      estado: true,
-      personalMinimo: true,
-      indicativo: true,
-      posicion: { select: posicionSelect },
-      evento: { select: eventoListSelect },
-      personal: { select: { id: true } },
-    },
-    orderBy: { codigo: 'asc' },
-  });
+// Selección compartida por getDotacionesByEvento/getDotacionesSinFiltro.
+// Se traen todas las plazas de cada dotación (solo `personaId`, mínimo payload)
+// y contamos en JS: totales para la columna "Plazas" y asignadas para "Personal".
+// Prisma no permite dos entradas `plazas` en un mismo _count, así que el array
+// mínimo es la vía más simple y rápida.
+const dotacionListSelect = {
+  id: true,
+  codigo: true,
+  tipo: true,
+  estado: true,
+  personalMinimo: true,
+  indicativo: true,
+  posicion: { select: posicionSelect },
+  evento: { select: eventoListSelect },
+  plazas: { select: { personaId: true } },
+} as const;
 
-  return dotaciones.map((d) => ({
+function serializarDotacionListItem(d: {
+  id: number;
+  codigo: string;
+  tipo: string;
+  estado: string;
+  personalMinimo: number;
+  indicativo: string | null;
+  posicion: { id: number; nombre: string; sector: string | null } | null;
+  evento: { id: number; nombre: string; fecha: Date };
+  plazas: { personaId: number | null }[];
+}): DotacionListItem {
+  const personalAsignado = d.plazas.reduce((n, p) => (p.personaId !== null ? n + 1 : n), 0);
+  return {
     id: d.id,
     codigo: d.codigo,
     tipo: d.tipo as DotacionListItem['tipo'],
@@ -150,8 +159,22 @@ export async function getDotacionesByEvento(eventoId: number): Promise<DotacionL
     indicativo: d.indicativo,
     posicion: d.posicion,
     evento: serializarEventoLista(d.evento),
-    numeroPersonasAsignadas: d.personal.length,
-  }));
+    numeroPersonasAsignadas: personalAsignado,
+    plazasTotal: d.plazas.length,
+  };
+}
+
+/**
+ * Obtiene todas las dotaciones activas de un evento específico.
+ */
+export async function getDotacionesByEvento(eventoId: number): Promise<DotacionListItem[]> {
+  const dotaciones = await prisma.dotacion.findMany({
+    where: { eventoId, deletedAt: null },
+    select: dotacionListSelect,
+    orderBy: { codigo: 'asc' },
+  });
+
+  return dotaciones.map(serializarDotacionListItem);
 }
 
 /**
@@ -161,34 +184,14 @@ export async function getDotacionesByEvento(eventoId: number): Promise<DotacionL
 export async function getDotacionesSinFiltro(): Promise<DotacionListItem[]> {
   const dotaciones = await prisma.dotacion.findMany({
     where: { deletedAt: null },
-    select: {
-      id: true,
-      codigo: true,
-      tipo: true,
-      estado: true,
-      personalMinimo: true,
-      indicativo: true,
-      posicion: { select: posicionSelect },
-      evento: { select: eventoListSelect },
-      personal: { select: { id: true } },
-    },
+    select: dotacionListSelect,
     orderBy: [
       { evento: { fecha: 'desc' } },
       { codigo: 'asc' },
     ],
   });
 
-  return dotaciones.map((d) => ({
-    id: d.id,
-    codigo: d.codigo,
-    tipo: d.tipo as DotacionListItem['tipo'],
-    estado: d.estado as DotacionListItem['estado'],
-    personalMinimo: d.personalMinimo,
-    indicativo: d.indicativo,
-    posicion: d.posicion,
-    evento: serializarEventoLista(d.evento),
-    numeroPersonasAsignadas: d.personal.length,
-  }));
+  return dotaciones.map(serializarDotacionListItem);
 }
 
 /**
@@ -212,6 +215,10 @@ export async function getDotacionById(id: number): Promise<DotacionDetalle | nul
         select: plazaPersonalSelect,
         orderBy: { numero: 'asc' },
       },
+      // Total de plazas (incluidas vacías) — alimenta el campo `plazasTotal`
+      // del listado. Se cuenta aparte porque el select de `plazas` de arriba
+      // ya está filtrado por personaId != null.
+      _count: { select: { plazas: true } },
       asignacionesMaterial: { select: materialSelect, orderBy: { createdAt: 'asc' } },
       walkies: {
         select: walkieSelect,
@@ -253,6 +260,7 @@ export async function getDotacionById(id: number): Promise<DotacionDetalle | nul
       horaFinEvento: dotacion.evento.horaFinEvento ?? null,
     },
     numeroPersonasAsignadas: plazasConPersona.length,
+    plazasTotal: dotacion._count.plazas,
     personal: plazasConPersona.map((p) => ({
       id: p.id,
       rolEnDotacion: p.rolRequerido ?? '',

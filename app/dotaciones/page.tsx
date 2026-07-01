@@ -431,7 +431,7 @@ function DotacionesContent() {
                     <th className="text-left px-4 py-3 font-medium text-slate-600">Tipo</th>
                     <th className="text-left px-4 py-3 font-medium text-slate-600">Estado</th>
                     <th className="text-center px-4 py-3 font-medium text-slate-600">Personal</th>
-                    <th className="text-left px-4 py-3 font-medium text-slate-600">Posición</th>
+                    <th className="text-center px-4 py-3 font-medium text-slate-600">Plazas</th>
                     <th className="text-right px-4 py-3 font-medium text-slate-600">Acciones</th>
                   </tr>
                 </thead>
@@ -456,8 +456,8 @@ function DotacionesContent() {
                           {d.numeroPersonasAsignadas}/{d.personalMinimo}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-slate-500 text-xs">
-                        {d.posicion?.nombre ?? <span className="text-slate-300">Sin asignar</span>}
+                      <td className="px-4 py-3 text-center text-slate-600 text-xs font-medium">
+                        {d.plazasTotal > 0 ? d.plazasTotal : <span className="text-slate-300">—</span>}
                       </td>
                       <td className="px-4 py-3 text-right space-x-2">
                         <button onClick={() => router.push(`/dotaciones/${d.id}`)} className="text-blue-600 hover:text-blue-800 text-sm font-medium">

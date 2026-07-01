@@ -60,6 +60,12 @@ export interface DotacionListItem {
   personalMinimo: number;
   indicativo: string | null;
   numeroPersonasAsignadas: number;
+  /**
+   * Nº total de plazas definidas en la dotación (personaId != null + vacías).
+   * Alimenta la columna "Plazas" del listado. Es el tamaño real de la
+   * plantilla RRHH — 4 para AMBULANCIA/CAMILLA, N según tipo.
+   */
+  plazasTotal: number;
   posicion: { id: number; nombre: string; sector: string | null; } | null;
   evento: { id: number; nombre: string; fecha: string; };
 }
