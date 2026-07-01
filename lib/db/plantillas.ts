@@ -70,6 +70,46 @@ export async function getPlantillas(): Promise<PlantillaListItem[]> {
   return filas.map(serializar);
 }
 
+export async function getPlantilla(plantillaId: number): Promise<PlantillaListItem | null> {
+  const fila = await prisma.plantillaEvento.findUnique({
+    where: { id: plantillaId },
+    select: plantillaSelect,
+  });
+  return fila ? serializar(fila) : null;
+}
+
+/**
+ * Borra una plantilla y todas sus dependencias (posiciones y filas de
+ * dimensionamiento) en una única transacción. No comprueba si algún evento
+ * la usa como origen: `Evento.plantillaOrigenId` es opcional y con
+ * ON DELETE queda a null implícitamente si eliminamos vía Prisma.
+ *
+ * Devuelve el nombre de la plantilla borrada — el llamador lo usa para el
+ * mensaje de confirmación.
+ */
+export async function deletePlantilla(plantillaId: number): Promise<string> {
+  return prisma.$transaction(async (tx) => {
+    const plantilla = await tx.plantillaEvento.findUnique({
+      where: { id: plantillaId },
+      select: { id: true, nombre: true },
+    });
+    if (!plantilla) {
+      const err: Error & { code?: string } = new Error(`No existe plantilla con id ${plantillaId}`);
+      err.code = 'P2025';
+      throw err;
+    }
+    // Desvincular eventos que la tuvieran como origen (FK opcional).
+    await tx.evento.updateMany({
+      where: { plantillaOrigenId: plantillaId },
+      data: { plantillaOrigenId: null },
+    });
+    await tx.plantillaDimensionamiento.deleteMany({ where: { plantillaId } });
+    await tx.plantillaPosicion.deleteMany({ where: { plantillaId } });
+    await tx.plantillaEvento.delete({ where: { id: plantillaId } });
+    return plantilla.nombre;
+  });
+}
+
 export async function createPlantilla(input: CreatePlantillaInput): Promise<PlantillaListItem> {
   const fila = await prisma.plantillaEvento.create({
     data: {

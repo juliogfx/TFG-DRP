@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import type { PlantillaListItem } from '@/types/plantilla';
 
 interface OpcionCatalogo { id: number; nombre: string; codigo: string }
@@ -45,6 +46,7 @@ export default function PlantillasPage() {
   const [form, setForm] = useState(FORM_INICIAL);
   const [errorModal, setErrorModal] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [borrando, setBorrando] = useState<number | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -107,6 +109,25 @@ export default function PlantillasPage() {
     }
   }
 
+  async function eliminarPlantilla(p: PlantillaListItem) {
+    const ok = window.confirm(
+      `¿Eliminar la plantilla "${p.nombre}"?\n\nSe borrarán también sus ${p.numeroPosiciones} posiciones y ${p.numeroFilasDim} filas de dimensionamiento. Esta acción no se puede deshacer.`
+    );
+    if (!ok) return;
+    setBorrando(p.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/plantillas/${p.id}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
+      await cargar();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al eliminar');
+    } finally {
+      setBorrando(null);
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -146,7 +167,7 @@ export default function PlantillasPage() {
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Tipo</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Ubicación</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Empresa</th>
-                <th className="text-center px-4 py-3 font-medium text-slate-600">Posiciones</th>
+                <th className="text-center px-4 py-3 font-medium text-slate-600">Dotaciones activas</th>
                 <th className="text-right px-4 py-3 font-medium text-slate-600">Acciones</th>
               </tr>
             </thead>
@@ -165,16 +186,35 @@ export default function PlantillasPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-600">{p.empresa.nombre}</td>
                   <td className="px-4 py-3 text-center">
-                    <span className="inline-flex items-center justify-center w-8 h-7 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold">
-                      {p.numeroPosiciones}
+                    <span
+                      className={`inline-flex items-center justify-center min-w-8 h-7 px-2 rounded-full text-xs font-semibold ${
+                        p.numeroDotacionesActivas > 0
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {p.numeroDotacionesActivas}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => router.push(`/eventos/nuevo?plantillaId=${p.id}`)}
+                  <td className="px-4 py-3 text-right space-x-3 whitespace-nowrap">
+                    <Link
+                      href={`/plantillas/${p.id}`}
                       className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                     >
-                      Usar plantilla →
+                      Ver/Editar →
+                    </Link>
+                    <button
+                      onClick={() => router.push(`/eventos/nuevo?plantillaId=${p.id}`)}
+                      className="text-slate-600 hover:text-slate-800 text-sm font-medium"
+                    >
+                      Usar
+                    </button>
+                    <button
+                      onClick={() => eliminarPlantilla(p)}
+                      disabled={borrando === p.id}
+                      className="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-40"
+                    >
+                      {borrando === p.id ? 'Eliminando…' : 'Eliminar'}
                     </button>
                   </td>
                 </tr>
@@ -285,7 +325,7 @@ export default function PlantillasPage() {
                 />
               </div>
               <p className="text-xs text-slate-500 italic">
-                La plantilla se crea vacía (sin posiciones). Las posiciones canónicas del Bernabéu se generan al reseedear o se editarán posteriormente por la API.
+                Tras crear la plantilla podrás definir su dimensionamiento (dotaciones + RRHH + RRMM) desde la página de detalle de la plantilla.
               </p>
             </div>
 
