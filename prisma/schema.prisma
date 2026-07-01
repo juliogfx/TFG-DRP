@@ -521,6 +521,10 @@ model PlazaDotacion {
   rolRequerido    String?   @map("rol_requerido") @db.VarChar(50)
   personaId       Int?      @map("persona_id")
   incorporacion   String?   @db.VarChar(20)
+  /// Contar en el total del dispositivo (columna CONTAR del Excel Asistentes)
+  contar          Boolean   @default(true)
+  /// Acrónimo de función (MED, ENF, TEC, SOC, CON, COO, PRA, OPE...)
+  acron           String?   @db.VarChar(10)
   observaciones   String?   @db.Text
 
   dotacion        Dotacion  @relation(fields: [dotacionId], references: [id])

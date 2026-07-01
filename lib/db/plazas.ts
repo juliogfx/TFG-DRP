@@ -18,12 +18,15 @@ export interface PlazaItem {
   nombre: string;
   rolRequerido: string | null;
   incorporacion: string | null;
+  contar: boolean;
+  acron: string | null;
   observaciones: string | null;
   persona: {
     id: number;
     nombreCompleto: string;
     tipo: string;
     titulacion: string | null;
+    telefono: string | null;
   } | null;
 }
 
@@ -71,6 +74,8 @@ const plazaSelect = {
   nombre: true,
   rolRequerido: true,
   incorporacion: true,
+  contar: true,
+  acron: true,
   observaciones: true,
   persona: {
     select: {
@@ -78,6 +83,7 @@ const plazaSelect = {
       nombreCompleto: true,
       tipo: true,
       titulacion: { select: { nombre: true } },
+      telefono: true,
     },
   },
 } as const;
@@ -88,8 +94,10 @@ function serializarPlaza(p: {
   nombre: string;
   rolRequerido: string | null;
   incorporacion: string | null;
+  contar: boolean;
+  acron: string | null;
   observaciones: string | null;
-  persona: { id: number; nombreCompleto: string; tipo: string; titulacion: { nombre: string } | null } | null;
+  persona: { id: number; nombreCompleto: string; tipo: string; titulacion: { nombre: string } | null; telefono: string | null } | null;
 }): PlazaItem {
   return {
     id: p.id,
@@ -97,12 +105,15 @@ function serializarPlaza(p: {
     nombre: p.nombre,
     rolRequerido: p.rolRequerido,
     incorporacion: p.incorporacion,
+    contar: p.contar,
+    acron: p.acron,
     observaciones: p.observaciones,
     persona: p.persona ? {
       id: p.persona.id,
       nombreCompleto: p.persona.nombreCompleto,
       tipo: p.persona.tipo,
       titulacion: p.persona.titulacion?.nombre ?? null,
+      telefono: p.persona.telefono,
     } : null,
   };
 }
@@ -154,12 +165,21 @@ export async function getPlazasByEvento(eventoId: number): Promise<PlazasDeDotac
  */
 export async function updatePlaza(
   plazaId: number,
-  input: { personaId?: number | null; rolRequerido?: string | null; incorporacion?: string | null; observaciones?: string | null }
+  input: {
+    personaId?: number | null;
+    rolRequerido?: string | null;
+    incorporacion?: string | null;
+    contar?: boolean;
+    acron?: string | null;
+    observaciones?: string | null;
+  }
 ): Promise<PlazaItem> {
   const data: Record<string, unknown> = {};
   if (Object.prototype.hasOwnProperty.call(input, 'personaId')) data.personaId = input.personaId;
   if (Object.prototype.hasOwnProperty.call(input, 'rolRequerido')) data.rolRequerido = input.rolRequerido;
   if (Object.prototype.hasOwnProperty.call(input, 'incorporacion')) data.incorporacion = input.incorporacion;
+  if (Object.prototype.hasOwnProperty.call(input, 'contar')) data.contar = input.contar;
+  if (Object.prototype.hasOwnProperty.call(input, 'acron')) data.acron = input.acron;
   if (Object.prototype.hasOwnProperty.call(input, 'observaciones')) data.observaciones = input.observaciones;
 
   const plaza = await prisma.plazaDotacion.update({

@@ -387,7 +387,12 @@ async function main() {
     update: {},
     create: { nombre: 'Voluntario básico', orden: 5 },
   });
-  console.log('✓ Titulaciones creadas:', titTES.nombre, titMedico.nombre, titDUE.nombre, titSocorrista.nombre, titVoluntario.nombre);
+  const titPracticas = await prisma.titulacionCatalogo.upsert({
+    where: { nombre: 'Estudiante en Prácticas' },
+    update: {},
+    create: { nombre: 'Estudiante en Prácticas', orden: 6 },
+  });
+  console.log('✓ Titulaciones creadas:', titTES.nombre, titMedico.nombre, titDUE.nombre, titSocorrista.nombre, titVoluntario.nombre, titPracticas.nombre);
 
   const personas = [
     {
@@ -427,7 +432,144 @@ async function main() {
       create: { ...p, activo: true },
     });
   }
-  console.log('✓ Personal sanitario creado');
+  console.log('✓ Personal sanitario base creado (4 personas de prueba)');
+
+  await crearPersonasFicticias();
+  console.log('✓ Personas ficticias creadas (67 asistentes DRP-test)');
+
+  /**
+   * Crea 67 personas ficticias plausibles para poblar la pantalla de
+   * asignación. Emails y datos son deterministas (mismo listado siempre
+   * genera los mismos emails → idempotente vía upsert por email).
+   * Las 4 personas de prueba existentes no se tocan.
+   */
+  async function crearPersonasFicticias() {
+    type Puesto = 'SOC' | 'TES' | 'ENF' | 'MED' | 'PRA' | 'OPE' | 'COO';
+    interface Ficticia { nombre: string; apellidos: string; puesto: Puesto }
+    const lista: Ficticia[] = [
+      // SOC — Socorristas terrestres (12) → titulación Socorrista, VOLUNTARIO
+      { nombre: 'Antonio', apellidos: 'García Ruiz',        puesto: 'SOC' },
+      { nombre: 'Carlos',  apellidos: 'Sánchez López',      puesto: 'SOC' },
+      { nombre: 'Laura',   apellidos: 'Fernández Gil',      puesto: 'SOC' },
+      { nombre: 'Javier',  apellidos: 'Torres Blanco',      puesto: 'SOC' },
+      { nombre: 'Ana',     apellidos: 'Martín Ruiz',        puesto: 'SOC' },
+      { nombre: 'Sara',    apellidos: 'Molina Vega',        puesto: 'SOC' },
+      { nombre: 'Diego',   apellidos: 'Ramos Ortiz',        puesto: 'SOC' },
+      { nombre: 'Marta',   apellidos: 'Delgado Reyes',      puesto: 'SOC' },
+      { nombre: 'David',   apellidos: 'Núñez Vidal',        puesto: 'SOC' },
+      { nombre: 'Nuria',   apellidos: 'Ibáñez Vega',        puesto: 'SOC' },
+      { nombre: 'Adrián',  apellidos: 'Prieto Cabrera',     puesto: 'SOC' },
+      { nombre: 'Elena',   apellidos: 'Vargas Peña',        puesto: 'SOC' },
+      // TES — Tripulantes de ambulancia (20) → TES, VOLUNTARIO
+      { nombre: 'Pedro',    apellidos: 'Rodríguez López',    puesto: 'TES' },
+      { nombre: 'Isabel',   apellidos: 'Muñoz Serrano',      puesto: 'TES' },
+      { nombre: 'Miguel',   apellidos: 'García Domínguez',   puesto: 'TES' },
+      { nombre: 'Cristina', apellidos: 'Álvarez Ramos',      puesto: 'TES' },
+      { nombre: 'Fernando', apellidos: 'Ortega Vidal',       puesto: 'TES' },
+      { nombre: 'Beatriz',  apellidos: 'Castro Vega',        puesto: 'TES' },
+      { nombre: 'Rubén',    apellidos: 'Herrera Cano',       puesto: 'TES' },
+      { nombre: 'Yolanda',  apellidos: 'Aguilar Peña',       puesto: 'TES' },
+      { nombre: 'Manuel',   apellidos: 'Jiménez Hernández',  puesto: 'TES' },
+      { nombre: 'Rosa',     apellidos: 'Nieto Cortés',       puesto: 'TES' },
+      { nombre: 'Óscar',    apellidos: 'Cabrera Márquez',    puesto: 'TES' },
+      { nombre: 'Silvia',   apellidos: 'Domínguez Ferrer',   puesto: 'TES' },
+      { nombre: 'Andrés',   apellidos: 'Iglesias Suárez',    puesto: 'TES' },
+      { nombre: 'Patricia', apellidos: 'Guerrero León',      puesto: 'TES' },
+      { nombre: 'Alberto',  apellidos: 'Pascual Mendoza',    puesto: 'TES' },
+      { nombre: 'Marina',   apellidos: 'Cordero Blanco',     puesto: 'TES' },
+      { nombre: 'Sergio',   apellidos: 'Reyes Arias',        puesto: 'TES' },
+      { nombre: 'Vanessa',  apellidos: 'Ortiz Segura',       puesto: 'TES' },
+      { nombre: 'Iván',     apellidos: 'Márquez Aguado',     puesto: 'TES' },
+      { nombre: 'Teresa',   apellidos: 'Bravo Rincón',       puesto: 'TES' },
+      // ENF — Enfermeros/as (15) → DUE, FACULTATIVO
+      { nombre: 'María',    apellidos: 'Pérez Sánchez',      puesto: 'ENF' },
+      { nombre: 'Elena',    apellidos: 'López Gómez',        puesto: 'ENF' },
+      { nombre: 'Andrea',   apellidos: 'Martínez Torres',    puesto: 'ENF' },
+      { nombre: 'Paula',    apellidos: 'Álvarez Molina',     puesto: 'ENF' },
+      { nombre: 'Verónica', apellidos: 'Vega Prieto',        puesto: 'ENF' },
+      { nombre: 'Lucía',    apellidos: 'Salgado Rivas',      puesto: 'ENF' },
+      { nombre: 'Cristina', apellidos: 'Aparicio Redondo',   puesto: 'ENF' },
+      { nombre: 'Alicia',   apellidos: 'Cano Miralles',      puesto: 'ENF' },
+      { nombre: 'Susana',   apellidos: 'Herrera Peña',       puesto: 'ENF' },
+      { nombre: 'Mónica',   apellidos: 'Reyes Molina',       puesto: 'ENF' },
+      { nombre: 'Beatriz',  apellidos: 'Ortiz Ramos',        puesto: 'ENF' },
+      { nombre: 'Rosa',     apellidos: 'Delgado Fuentes',    puesto: 'ENF' },
+      { nombre: 'Pilar',    apellidos: 'Márquez Rivas',      puesto: 'ENF' },
+      { nombre: 'Sara',     apellidos: 'Vidal Escobar',      puesto: 'ENF' },
+      { nombre: 'Marta',    apellidos: 'Rincón Solana',      puesto: 'ENF' },
+      // MED — Médicos (12) → Médico, FACULTATIVO
+      { nombre: 'Enrique',  apellidos: 'Gómez Ruiz',         puesto: 'MED' },
+      { nombre: 'Ignacio',  apellidos: 'Prieto Cano',        puesto: 'MED' },
+      { nombre: 'Rafael',   apellidos: 'Serrano Gil',        puesto: 'MED' },
+      { nombre: 'Julián',   apellidos: 'Ortega Blanco',      puesto: 'MED' },
+      { nombre: 'Salvador', apellidos: 'Núñez Iglesias',     puesto: 'MED' },
+      { nombre: 'Emilio',   apellidos: 'Bravo Guerrero',     puesto: 'MED' },
+      { nombre: 'Jorge',    apellidos: 'Ramírez Suárez',     puesto: 'MED' },
+      { nombre: 'Ramón',    apellidos: 'Delgado Ferrer',     puesto: 'MED' },
+      { nombre: 'Víctor',   apellidos: 'Aguado Prieto',      puesto: 'MED' },
+      { nombre: 'Xavier',   apellidos: 'Reyes Cabrera',      puesto: 'MED' },
+      { nombre: 'Carmen',   apellidos: 'Vidal Salgado',      puesto: 'MED' },
+      { nombre: 'Raquel',   apellidos: 'Aparicio Herrera',   puesto: 'MED' },
+      // PRA — Prácticas B95 (4) → Estudiante en Prácticas, VOLUNTARIO
+      { nombre: 'Sonia',    apellidos: 'Domínguez Ibáñez',   puesto: 'PRA' },
+      { nombre: 'Marcos',   apellidos: 'Pascual Aguilar',    puesto: 'PRA' },
+      { nombre: 'Pablo',    apellidos: 'Cordero Segura',     puesto: 'PRA' },
+      { nombre: 'Andrea',   apellidos: 'Vargas Solana',      puesto: 'PRA' },
+      // OPE — Operadores de Comunicaciones (3) → TES, VOLUNTARIO
+      { nombre: 'Alejandro', apellidos: 'Ramos Nieto',       puesto: 'OPE' },
+      { nombre: 'Nuria',     apellidos: 'Iglesias Fuentes',  puesto: 'OPE' },
+      { nombre: 'Mario',     apellidos: 'Torres Serrano',    puesto: 'OPE' },
+      // COO — Coordinador/a DRP (1) → Médico, FACULTATIVO
+      { nombre: 'Ángel',     apellidos: 'Salgado Muñoz',     puesto: 'COO' },
+    ];
+    if (lista.length !== 67) throw new Error(`Se esperaban 67 personas ficticias, hay ${lista.length}`);
+
+    function slug(s: string): string {
+      return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+    }
+    function titulacionId(p: Puesto): number {
+      switch (p) {
+        case 'SOC': return titSocorrista.id;
+        case 'TES': return titTES.id;
+        case 'OPE': return titTES.id;
+        case 'ENF': return titDUE.id;
+        case 'MED': return titMedico.id;
+        case 'COO': return titMedico.id;
+        case 'PRA': return titPracticas.id;
+      }
+    }
+    function tipoPersona(p: Puesto): TipoPersona {
+      return p === 'MED' || p === 'ENF' || p === 'COO'
+        ? TipoPersona.FACULTATIVO
+        : TipoPersona.VOLUNTARIO;
+    }
+
+    const emailCounter = new Map<string, number>();
+    for (const f of lista) {
+      const key = slug(f.nombre);
+      const idx = (emailCounter.get(key) ?? 0) + 1;
+      emailCounter.set(key, idx);
+      const email = `${key}${idx}@drp-test.com`;
+      await prisma.persona.upsert({
+        where: { email },
+        update: {
+          nombreCompleto: `${f.nombre} ${f.apellidos}`,
+          telefono: '666666666',
+          tipo: tipoPersona(f.puesto),
+          titulacionId: titulacionId(f.puesto),
+          activo: true,
+        },
+        create: {
+          email,
+          nombreCompleto: `${f.nombre} ${f.apellidos}`,
+          telefono: '666666666',
+          tipo: tipoPersona(f.puesto),
+          titulacionId: titulacionId(f.puesto),
+          activo: true,
+        },
+      });
+    }
+  }
 
   const walkieNumeros = [
     'W-01','W-02','W-03','W-04','W-05','W-06',

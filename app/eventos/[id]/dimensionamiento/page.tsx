@@ -75,6 +75,7 @@ export default function DimensionamientoPage() {
   const [guardandoPlantilla, setGuardandoPlantilla] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [resultadoConfirm, setResultadoConfirm] = useState<{ dotacionesCreadas: number; plazasCreadas: number } | null>(null);
 
   const cargar = useCallback(async () => {
     if (!eventoId) return;
@@ -139,6 +140,7 @@ export default function DimensionamientoPage() {
     setConfirmando(true);
     setError(null);
     setInfo(null);
+    setResultadoConfirm(null);
     const ok = await guardar();
     if (!ok) {
       setConfirmando(false);
@@ -150,9 +152,10 @@ export default function DimensionamientoPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
-      router.push(`/eventos/${eventoId}/asignacion`);
+      setResultadoConfirm(json.data ?? { dotacionesCreadas: 0, plazasCreadas: 0 });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al confirmar');
+    } finally {
       setConfirmando(false);
     }
   }
@@ -428,6 +431,27 @@ export default function DimensionamientoPage() {
       )}
       {info && (
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-md mb-4">{info}</div>
+      )}
+      {resultadoConfirm && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-md px-4 py-4 mb-6">
+          <div className="text-emerald-800 font-medium mb-3">
+            ✅ Dimensionamiento confirmado. Se han creado {resultadoConfirm.dotacionesCreadas} dotaciones con {resultadoConfirm.plazasCreadas} plazas.
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => router.push(`/eventos/${eventoId}/asignacion`)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-md"
+            >
+              Asignar personal →
+            </button>
+            <button
+              onClick={() => router.push('/eventos')}
+              className="border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-4 py-2 rounded-md"
+            >
+              Volver a eventos
+            </button>
+          </div>
+        </div>
       )}
 
       {cargando ? (

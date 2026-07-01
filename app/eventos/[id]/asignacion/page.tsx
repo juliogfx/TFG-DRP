@@ -1,11 +1,12 @@
 /**
  * @file app/eventos/[id]/asignacion/page.tsx
- * @description Opción B — Asignación de personal a plazas de cada dotación.
+ * @description Rediseño Excel Asistentes — tabla única con todas las
+ * personas del sistema y una columna POSICIÓN que asigna cada persona a
+ * una PlazaDotacion del evento. Guardado inmediato en cada cambio.
  *
- * Muestra todas las dotaciones del evento agrupadas; para cada dotación una
- * tabla con sus plazas (PLAZA | ROL | ASISTENTE | INCORPORACIÓN | ACCIONES).
- * Las personas ya asignadas en este evento no aparecen en el selector — el
- * filtrado se hace en cliente para no duplicar a una misma persona.
+ * Columnas: POSICIÓN / CONTAR / ACRON / INCORPORACIÓN / NOMBRE / TEL /
+ *           PUESTO / OBSERV.
+ * Filtros:  dotación, puesto, buscador de nombre.
  */
 
 'use client';
@@ -13,12 +14,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import type { EventoDetalle } from '@/types/evento';
 
 interface PersonaApi {
   id: number;
   nombreCompleto: string;
   tipo: 'VOLUNTARIO' | 'FACULTATIVO';
   titulacion: string | null;
+  telefono: string | null;
 }
 
 interface PlazaApi {
@@ -27,7 +30,10 @@ interface PlazaApi {
   nombre: string;
   rolRequerido: string | null;
   incorporacion: string | null;
-  persona: { id: number; nombreCompleto: string; tipo: string; titulacion: string | null } | null;
+  contar: boolean;
+  acron: string | null;
+  observaciones: string | null;
+  persona: { id: number; nombreCompleto: string; tipo: string; titulacion: string | null; telefono: string | null } | null;
 }
 
 interface GrupoApi {
@@ -41,8 +47,33 @@ interface GrupoApi {
   plazas: PlazaApi[];
 }
 
-const ROLES = ['CONDUCTOR', 'TECNICO', 'MEDICO', 'ENFERMERO', 'SOCORRISTA', 'COORDINADOR', 'OTRO'];
-const INCORPORACIONES = ['PLANTIO', 'SERVICIO', 'B85', 'OTRO'];
+interface FilaAsist {
+  persona: PersonaApi;
+  plazaId: number | null;
+  dotacionId: number | null;
+  plazaNombre: string | null;
+  contar: boolean;
+  acron: string | null;
+  incorporacion: string | null;
+  observaciones: string | null;
+}
+
+const INCORPORACIONES = ['PLANTIO', 'SERVICIO', 'B85'];
+
+function acronDefaultDeTitulacion(titulacion: string | null): string {
+  if (!titulacion) return '';
+  const t = titulacion.toLowerCase();
+  if (t.includes('médic')) return 'MED';
+  if (t.includes('enferm') || t.includes('due')) return 'ENF';
+  if (t.includes('técnic') || t.includes('emergenc')) return 'TEC';
+  if (t.includes('socorrist')) return 'SOC';
+  if (t.includes('práctic') || t.includes('practic')) return 'PRA';
+  if (t.includes('conductor')) return 'CON';
+  if (t.includes('coordin')) return 'COO';
+  if (t.includes('operador') || t.includes('comunicac')) return 'OPE';
+  if (t.includes('volunt')) return 'VOL';
+  return '';
+}
 
 export default function AsignacionPage() {
   const params = useParams<{ id: string }>();
@@ -50,10 +81,14 @@ export default function AsignacionPage() {
 
   const [grupos, setGrupos] = useState<GrupoApi[]>([]);
   const [personas, setPersonas] = useState<PersonaApi[]>([]);
-  const [nombreEvento, setNombreEvento] = useState('');
+  const [evento, setEvento] = useState<EventoDetalle | null>(null);
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [filtroDot, setFiltroDot] = useState<string>('TODAS');
+  const [filtroPuesto, setFiltroPuesto] = useState<string>('TODOS');
+  const [buscador, setBuscador] = useState<string>('');
 
   const cargar = useCallback(async () => {
     if (!eventoId) return;
@@ -72,7 +107,7 @@ export default function AsignacionPage() {
       setPersonas(jsonPer.data ?? []);
       if (resEv.ok) {
         const jsonEv = await resEv.json();
-        setNombreEvento(jsonEv.data?.nombre ?? '');
+        setEvento(jsonEv.data ?? null);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al cargar');
@@ -83,21 +118,110 @@ export default function AsignacionPage() {
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  const personasYaAsignadas = useMemo(() => {
-    const set = new Set<number>();
+  const plazaPorPersona = useMemo(() => {
+    const map = new Map<number, { plaza: PlazaApi; dotacionId: number }>();
     for (const g of grupos) {
       for (const p of g.plazas) {
-        if (p.persona) set.add(p.persona.id);
+        if (p.persona) map.set(p.persona.id, { plaza: p, dotacionId: g.dotacion.id });
       }
     }
-    return set;
+    return map;
   }, [grupos]);
 
+  const plazasLibres = useMemo(() => {
+    const libres: { plaza: PlazaApi; dotacionId: number; dotacionCodigo: string }[] = [];
+    for (const g of grupos) {
+      for (const p of g.plazas) {
+        if (!p.persona) libres.push({ plaza: p, dotacionId: g.dotacion.id, dotacionCodigo: g.dotacion.codigo });
+      }
+    }
+    return libres;
+  }, [grupos]);
+
+  const filasBase: FilaAsist[] = useMemo(() => {
+    const filas: FilaAsist[] = personas.map((per) => {
+      const asig = plazaPorPersona.get(per.id);
+      if (asig) {
+        return {
+          persona: per,
+          plazaId: asig.plaza.id,
+          dotacionId: asig.dotacionId,
+          plazaNombre: asig.plaza.nombre,
+          contar: asig.plaza.contar,
+          acron: asig.plaza.acron ?? acronDefaultDeTitulacion(per.titulacion),
+          incorporacion: asig.plaza.incorporacion,
+          observaciones: asig.plaza.observaciones,
+        };
+      }
+      return {
+        persona: per,
+        plazaId: null,
+        dotacionId: null,
+        plazaNombre: null,
+        contar: true,
+        acron: acronDefaultDeTitulacion(per.titulacion),
+        incorporacion: null,
+        observaciones: null,
+      };
+    });
+    // Asignados primero (por puesto), luego libres (por puesto)
+    return filas.sort((a, b) => {
+      const asigA = a.plazaId !== null ? 0 : 1;
+      const asigB = b.plazaId !== null ? 0 : 1;
+      if (asigA !== asigB) return asigA - asigB;
+      const puestoA = a.persona.titulacion ?? 'zzz';
+      const puestoB = b.persona.titulacion ?? 'zzz';
+      const cmp = puestoA.localeCompare(puestoB, 'es');
+      if (cmp !== 0) return cmp;
+      return a.persona.nombreCompleto.localeCompare(b.persona.nombreCompleto, 'es');
+    });
+  }, [personas, plazaPorPersona]);
+
+  const dotacionesUnicas = useMemo(() => {
+    return Array.from(new Set(grupos.map((g) => g.dotacion.codigo))).sort();
+  }, [grupos]);
+  const puestosUnicos = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of personas) if (p.titulacion) set.add(p.titulacion);
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'es'));
+  }, [personas]);
+
+  const filas = useMemo(() => {
+    return filasBase.filter((f) => {
+      // Filtro dotación: asignados a esa dotación + libres
+      if (filtroDot !== 'TODAS') {
+        const g = grupos.find((gg) => gg.dotacion.codigo === filtroDot);
+        const idDot = g?.dotacion.id;
+        const enDotacion = f.dotacionId !== null && f.dotacionId === idDot;
+        const libre = f.plazaId === null;
+        if (!enDotacion && !libre) return false;
+      }
+      if (filtroPuesto !== 'TODOS') {
+        if ((f.persona.titulacion ?? '') !== filtroPuesto) return false;
+      }
+      if (buscador.trim() !== '') {
+        const q = buscador.trim().toLowerCase();
+        if (!f.persona.nombreCompleto.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }, [filasBase, filtroDot, filtroPuesto, buscador, grupos]);
+
+  /**
+   * PUT a una plaza actualizando alguno de sus campos. Guardado inmediato:
+   * al terminar recarga los datos para tener el estado consistente.
+   */
   async function actualizarPlaza(
     dotacionId: number,
     plazaId: number,
-    cambios: { personaId?: number | null; rolRequerido?: string | null; incorporacion?: string | null }
-  ) {
+    cambios: {
+      personaId?: number | null;
+      incorporacion?: string | null;
+      contar?: boolean;
+      acron?: string | null;
+      observaciones?: string | null;
+    }
+  ): Promise<boolean> {
     setGuardando(plazaId);
     setError(null);
     try {
@@ -108,30 +232,59 @@ export default function AsignacionPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
-      await cargar();
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al actualizar');
+      return false;
     } finally {
       setGuardando(null);
     }
   }
 
-  function selectorPersonas(plazaActual: PlazaApi) {
-    const propia = plazaActual.persona?.id ?? null;
-    const opciones = personas.filter((p) => p.id === propia || !personasYaAsignadas.has(p.id));
-    return opciones;
+  /** Cambia la asignación de una persona a una plaza distinta (o la libera). */
+  async function cambiarAsignacion(fila: FilaAsist, nuevaPlazaId: number | null) {
+    // Si la persona ya tenía plaza, liberarla primero
+    if (fila.plazaId !== null && fila.dotacionId !== null) {
+      const ok = await actualizarPlaza(fila.dotacionId, fila.plazaId, { personaId: null });
+      if (!ok) return;
+    }
+    if (nuevaPlazaId !== null) {
+      const nuevo = plazasLibres.find((pl) => pl.plaza.id === nuevaPlazaId);
+      if (!nuevo) {
+        setError('Plaza seleccionada ya no disponible.');
+        await cargar();
+        return;
+      }
+      // Rellenar con los defaults del ACRON si la plaza aún no lo tiene
+      const acronPropuesto = nuevo.plaza.acron ?? acronDefaultDeTitulacion(fila.persona.titulacion);
+      await actualizarPlaza(nuevo.dotacionId, nuevo.plaza.id, {
+        personaId: fila.persona.id,
+        acron: acronPropuesto,
+      });
+    }
+    await cargar();
   }
 
   return (
     <div>
-      <div className="mb-4">
+      <div className="mb-4 flex items-center gap-4">
         <Link href="/eventos" className="text-sm text-slate-500 hover:text-slate-700">← Volver a eventos</Link>
+        <span className="text-slate-300">·</span>
+        <Link
+          href={`/eventos/${eventoId}/dimensionamiento`}
+          className="text-sm text-slate-500 hover:text-slate-700"
+        >
+          ← Volver al dimensionamiento
+        </Link>
       </div>
 
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Asignación de asistentes</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{nombreEvento || `Evento #${eventoId}`}</p>
+          <p className="text-sm text-slate-500 mt-0.5">{evento?.nombre || `Evento #${eventoId}`}</p>
+        </div>
+        <div className="text-sm text-slate-500">
+          {filasBase.filter((f) => f.plazaId !== null).length}/{filasBase.length} asignadas
         </div>
       </div>
 
@@ -139,120 +292,176 @@ export default function AsignacionPage() {
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-4">{error}</div>
       )}
 
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">Dotación</label>
+          <select
+            value={filtroDot}
+            onChange={(e) => setFiltroDot(e.target.value)}
+            className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-sm bg-white"
+          >
+            <option value="TODAS">TODAS</option>
+            {dotacionesUnicas.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">Puesto</label>
+          <select
+            value={filtroPuesto}
+            onChange={(e) => setFiltroPuesto(e.target.value)}
+            className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-sm bg-white"
+          >
+            <option value="TODOS">TODOS</option>
+            {puestosUnicos.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <div className="md:col-span-2">
+          <label className="block text-xs font-medium text-slate-500 mb-1">Buscar nombre</label>
+          <input
+            type="text"
+            value={buscador}
+            onChange={(e) => setBuscador(e.target.value)}
+            placeholder="Filtrar por nombre…"
+            className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-sm"
+          />
+        </div>
+      </div>
+
       {cargando ? (
         <div className="text-center py-12 text-slate-500">Cargando…</div>
-      ) : grupos.length === 0 ? (
+      ) : filasBase.length === 0 ? (
         <p className="text-sm text-slate-400 text-center py-12 border border-dashed border-slate-200 rounded-lg">
-          No hay dotaciones con plazas en este evento. Revisa el dimensionamiento.
+          No hay personas activas en el sistema.
         </p>
       ) : (
-        <div className="space-y-6">
-          {grupos.map((g) => (
-            <div key={g.dotacion.id} className="rounded-lg border border-slate-200">
-              <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                <div>
-                  <span className="font-mono font-semibold text-slate-900">{g.dotacion.codigo}</span>
-                  <span className="text-xs text-slate-500 ml-2">{g.dotacion.tipo}</span>
-                  {g.dotacion.indicativo && (
-                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-mono font-medium">
-                      {g.dotacion.indicativo}
-                    </span>
-                  )}
-                  {g.dotacion.posicion && (
-                    <span className="text-xs text-slate-500 ml-2">· {g.dotacion.posicion.nombre} ({g.dotacion.posicion.zona ?? '—'})</span>
-                  )}
-                </div>
-                <Link
-                  href={`/dotaciones/${g.dotacion.id}`}
-                  className="text-blue-600 hover:text-blue-800 text-xs font-medium"
-                >
-                  Abrir dotación →
-                </Link>
-              </div>
-              {g.plazas.length === 0 ? (
-                <p className="text-xs text-slate-400 px-4 py-3">Esta dotación no tiene plazas configuradas.</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead className="border-b border-slate-200">
-                    <tr>
-                      <th className="text-left px-4 py-2 font-medium text-slate-600 w-24">PLAZA</th>
-                      <th className="text-left px-4 py-2 font-medium text-slate-600 w-36">ROL REQUERIDO</th>
-                      <th className="text-left px-4 py-2 font-medium text-slate-600">ASISTENTE ASIGNADO</th>
-                      <th className="text-left px-4 py-2 font-medium text-slate-600 w-44">INCORPORACIÓN</th>
-                      <th className="text-right px-4 py-2 font-medium text-slate-600 w-32">ACCIONES</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {g.plazas.map((p) => (
-                      <tr key={p.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-2 font-mono font-semibold text-slate-800">{p.nombre}</td>
-                        <td className="px-4 py-2">
-                          <select
-                            value={p.rolRequerido ?? ''}
-                            onChange={(e) => actualizarPlaza(g.dotacion.id, p.id, { rolRequerido: e.target.value || null })}
-                            className="w-full border border-slate-300 rounded px-2 py-1 text-sm"
-                          >
-                            <option value="">—</option>
-                            {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                          </select>
-                        </td>
-                        <td className="px-4 py-2">
-                          {p.persona ? (
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-slate-800">{p.persona.nombreCompleto}</span>
-                              <span className="text-xs text-slate-500">
-                                ({p.persona.tipo === 'FACULTATIVO' ? 'FAC' : 'VOL'}{p.persona.titulacion ? ` · ${p.persona.titulacion}` : ''})
-                              </span>
-                            </div>
-                          ) : (
-                            <select
-                              defaultValue=""
-                              onChange={(e) => {
-                                const id = Number(e.target.value);
-                                if (id) actualizarPlaza(g.dotacion.id, p.id, { personaId: id });
-                              }}
-                              className="w-full border border-slate-300 rounded px-2 py-1 text-sm"
-                            >
-                              <option value="">— Seleccionar persona —</option>
-                              {selectorPersonas(p).map((per) => (
-                                <option key={per.id} value={per.id}>
-                                  {per.nombreCompleto} ({per.tipo === 'FACULTATIVO' ? 'FAC' : 'VOL'}{per.titulacion ? ` · ${per.titulacion}` : ''})
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                        </td>
-                        <td className="px-4 py-2">
-                          <select
-                            value={p.incorporacion ?? ''}
-                            onChange={(e) => actualizarPlaza(g.dotacion.id, p.id, { incorporacion: e.target.value || null })}
-                            className="w-full border border-slate-300 rounded px-2 py-1 text-sm"
-                          >
-                            <option value="">—</option>
-                            {INCORPORACIONES.map((i) => <option key={i} value={i}>{i}</option>)}
-                          </select>
-                        </td>
-                        <td className="px-4 py-2 text-right space-x-2">
-                          {p.persona ? (
-                            <button
-                              onClick={() => actualizarPlaza(g.dotacion.id, p.id, { personaId: null })}
-                              disabled={guardando === p.id}
-                              className="text-red-500 hover:text-red-700 text-sm font-medium disabled:opacity-40"
-                            >
-                              Liberar
-                            </button>
-                          ) : (
-                            <span className="text-xs text-slate-400">—</span>
-                          )}
-                          {guardando === p.id && <span className="text-xs text-slate-400">…</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          ))}
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="text-left px-3 py-2 font-medium text-slate-600 w-40">POSICIÓN</th>
+                <th className="text-center px-2 py-2 font-medium text-slate-600 w-16">CONTAR</th>
+                <th className="text-left px-2 py-2 font-medium text-slate-600 w-20">ACRON</th>
+                <th className="text-left px-2 py-2 font-medium text-slate-600 w-32">INCORP.</th>
+                <th className="text-left px-3 py-2 font-medium text-slate-600">NOMBRE Y APELLIDOS</th>
+                <th className="text-left px-3 py-2 font-medium text-slate-600 w-32">TELÉFONO</th>
+                <th className="text-left px-3 py-2 font-medium text-slate-600">PUESTO</th>
+                <th className="text-left px-3 py-2 font-medium text-slate-600 w-56">OBSERV./ACREDIT.</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filas.map((f) => {
+                const asignada = f.plazaId !== null && f.dotacionId !== null;
+                const disabled = !asignada || guardando === f.plazaId;
+                return (
+                  <tr
+                    key={f.persona.id}
+                    className={`hover:bg-slate-50 ${asignada ? '' : 'bg-slate-50/60'}`}
+                  >
+                    <td className="px-3 py-1.5">
+                      <select
+                        value={f.plazaId ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          cambiarAsignacion(f, val === '' ? null : Number(val));
+                        }}
+                        disabled={guardando !== null}
+                        className={`w-full border border-slate-300 rounded px-2 py-1 text-sm ${
+                          asignada ? 'font-mono font-semibold bg-emerald-50' : 'bg-white'
+                        }`}
+                      >
+                        <option value="">— Sin asignar —</option>
+                        {asignada && f.plazaNombre && (
+                          <option value={f.plazaId ?? ''}>{f.plazaNombre}</option>
+                        )}
+                        {plazasLibres.map((pl) => (
+                          <option key={pl.plaza.id} value={pl.plaza.id}>
+                            {pl.plaza.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-2 py-1.5 text-center">
+                      <input
+                        type="checkbox"
+                        checked={f.contar}
+                        disabled={disabled}
+                        onChange={(e) => {
+                          if (!asignada || f.dotacionId === null || f.plazaId === null) return;
+                          actualizarPlaza(f.dotacionId, f.plazaId, { contar: e.target.checked })
+                            .then((ok) => { if (ok) cargar(); });
+                        }}
+                      />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <input
+                        type="text"
+                        maxLength={10}
+                        value={f.acron ?? ''}
+                        disabled={disabled}
+                        onChange={(e) => {
+                          // actualización local rápida
+                          const nuevo = e.target.value.toUpperCase().slice(0, 10);
+                          setGrupos((prev) => prev.map((g) => ({
+                            ...g,
+                            plazas: g.plazas.map((p) => (p.id === f.plazaId ? { ...p, acron: nuevo } : p)),
+                          })));
+                        }}
+                        onBlur={(e) => {
+                          if (!asignada || f.dotacionId === null || f.plazaId === null) return;
+                          const val = e.target.value.trim().toUpperCase();
+                          actualizarPlaza(f.dotacionId, f.plazaId, { acron: val || null });
+                        }}
+                        className="w-16 border border-slate-300 rounded px-1 py-0.5 text-xs text-center uppercase disabled:bg-slate-100 disabled:text-slate-400"
+                      />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <select
+                        value={f.incorporacion ?? ''}
+                        disabled={disabled}
+                        onChange={(e) => {
+                          if (!asignada || f.dotacionId === null || f.plazaId === null) return;
+                          actualizarPlaza(f.dotacionId, f.plazaId, { incorporacion: e.target.value || null })
+                            .then((ok) => { if (ok) cargar(); });
+                        }}
+                        className="w-full border border-slate-300 rounded px-1 py-0.5 text-xs disabled:bg-slate-100 disabled:text-slate-400"
+                      >
+                        <option value="">—</option>
+                        {INCORPORACIONES.map((i) => <option key={i} value={i}>{i}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-3 py-1.5 font-medium text-slate-800">
+                      {f.persona.nombreCompleto}
+                      <span className="ml-2 text-xs text-slate-500">
+                        ({f.persona.tipo === 'FACULTATIVO' ? 'FAC' : 'VOL'})
+                      </span>
+                    </td>
+                    <td className="px-3 py-1.5 text-slate-600 tabular-nums">{f.persona.telefono ?? '—'}</td>
+                    <td className="px-3 py-1.5 text-slate-600">{f.persona.titulacion ?? '—'}</td>
+                    <td className="px-3 py-1.5">
+                      <input
+                        type="text"
+                        value={f.observaciones ?? ''}
+                        disabled={disabled}
+                        onChange={(e) => {
+                          const nuevo = e.target.value;
+                          setGrupos((prev) => prev.map((g) => ({
+                            ...g,
+                            plazas: g.plazas.map((p) => (p.id === f.plazaId ? { ...p, observaciones: nuevo } : p)),
+                          })));
+                        }}
+                        onBlur={(e) => {
+                          if (!asignada || f.dotacionId === null || f.plazaId === null) return;
+                          actualizarPlaza(f.dotacionId, f.plazaId, { observaciones: e.target.value || null });
+                        }}
+                        maxLength={200}
+                        className="w-full border border-slate-300 rounded px-1 py-0.5 text-xs disabled:bg-slate-100"
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

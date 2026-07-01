@@ -29,6 +29,8 @@ export async function PUT(req: NextRequest, ctx: Ctx): Promise<NextResponse> {
       personaId?: number | null;
       rolRequerido?: string | null;
       incorporacion?: string | null;
+      contar?: boolean;
+      acron?: string | null;
       observaciones?: string | null;
     };
     const data = await updatePlaza(plazaId, body);
