@@ -50,6 +50,17 @@ const asignacionSelect = {
   persona: { select: personaSelect },
 } as const;
 
+// Personal derivado de PlazaDotacion. La tabla vieja AsignacionPersonalDotacion
+// quedó desalineada cuando la pantalla de Asignación pasó a escribir en plazas;
+// la lectura por getDotacionById debe partir de las plazas para mantener
+// coherencia con el resto de la app (fichajes, dashboard UCO...).
+const plazaPersonalSelect = {
+  id: true,
+  numero: true,
+  rolRequerido: true,
+  persona: { select: personaSelect },
+} as const;
+
 const materialSelect = {
   id: true,
   cantidad: true,
@@ -196,7 +207,11 @@ export async function getDotacionById(id: number): Promise<DotacionDetalle | nul
       numDues: true,
       posicion: { select: posicionSelect },
       evento: { select: eventoDetalleSelect },
-      personal: { select: asignacionSelect, orderBy: { createdAt: 'asc' } },
+      plazas: {
+        where: { personaId: { not: null } },
+        select: plazaPersonalSelect,
+        orderBy: { numero: 'asc' },
+      },
       asignacionesMaterial: { select: materialSelect, orderBy: { createdAt: 'asc' } },
       walkies: {
         select: walkieSelect,
@@ -209,6 +224,15 @@ export async function getDotacionById(id: number): Promise<DotacionDetalle | nul
   });
 
   if (!dotacion) return null;
+
+  // El where personaId:not-null ya elimina plazas vacías, pero Prisma tipa la
+  // relación como opcional. Type guard local para no recurrir a `as`.
+  type PlazaConPersona = (typeof dotacion.plazas)[number] & {
+    persona: NonNullable<(typeof dotacion.plazas)[number]['persona']>;
+  };
+  const plazasConPersona = dotacion.plazas.filter(
+    (p): p is PlazaConPersona => p.persona !== null,
+  );
 
   return {
     id: dotacion.id,
@@ -228,8 +252,21 @@ export async function getDotacionById(id: number): Promise<DotacionDetalle | nul
       horaInicioEvento: dotacion.evento.horaInicioEvento ?? null,
       horaFinEvento: dotacion.evento.horaFinEvento ?? null,
     },
-    numeroPersonasAsignadas: dotacion.personal.length,
-    personal: dotacion.personal.map(serializarAsignacion),
+    numeroPersonasAsignadas: plazasConPersona.length,
+    personal: plazasConPersona.map((p) => ({
+      id: p.id,
+      rolEnDotacion: p.rolRequerido ?? '',
+      turnoInicioPrev: null,
+      turnoFinPrev: null,
+      asiste: null,
+      persona: {
+        id: p.persona.id,
+        nombreCompleto: p.persona.nombreCompleto,
+        tipo: p.persona.tipo as AsignacionPersonalItem['persona']['tipo'],
+        titulacion: p.persona.titulacion?.nombre ?? null,
+        telefono: p.persona.telefono,
+      },
+    })),
     material: dotacion.asignacionesMaterial.map((m) => ({
       id: m.id,
       cantidad: m.cantidad,
@@ -314,37 +351,102 @@ export async function deleteDotacion(id: number): Promise<void> {
 }
 
 /**
- * Asigna una persona a una dotación creando un registro AsignacionPersonalDotacion.
+ * Asigna una persona a una dotación ocupando una PlazaDotacion.
+ *
+ * Estrategia: usa la primera plaza vacía (ordenada por numero). Si la plaza
+ * ya trae un rolRequerido definido por la plantilla se respeta; si no, se
+ * rellena con el rol pedido. Si no queda ninguna plaza libre, crea una nueva
+ * al final con `numero = max(existentes) + 1`.
  */
 export async function asignarPersona(dotacionId: number, input: CreateAsignacionInput): Promise<AsignacionPersonalItem> {
-  const dotacion = await prisma.dotacion.findFirst({ where: { id: dotacionId, deletedAt: null }, select: { id: true } });
+  const dotacion = await prisma.dotacion.findFirst({
+    where: { id: dotacionId, deletedAt: null },
+    select: { id: true, codigo: true },
+  });
   if (!dotacion) throw new Error(`Dotación ${dotacionId} no encontrada`);
 
-  const asignacion = await prisma.asignacionPersonalDotacion.create({
-    data: {
-      dotacionId,
-      personaId: input.personaId,
-      rolEnDotacion: input.rolEnDotacion,
-      turnoInicioPrev: input.turnoInicioPrev ? new Date(input.turnoInicioPrev) : null,
-      turnoFinPrev: input.turnoFinPrev ? new Date(input.turnoFinPrev) : null,
-    },
-    select: asignacionSelect,
+  const yaEnPlaza = await prisma.plazaDotacion.findFirst({
+    where: { dotacionId, personaId: input.personaId },
+    select: { id: true },
   });
-  return serializarAsignacion(asignacion);
+  if (yaEnPlaza) {
+    throw new Error(`La persona ${input.personaId} ya está asignada a una plaza de esta dotación`);
+  }
+
+  const plazaVacia = await prisma.plazaDotacion.findFirst({
+    where: { dotacionId, personaId: null },
+    orderBy: { numero: 'asc' },
+    select: { id: true, rolRequerido: true },
+  });
+
+  let plazaId: number;
+  if (plazaVacia) {
+    const rolFinal = plazaVacia.rolRequerido ?? input.rolEnDotacion;
+    await prisma.plazaDotacion.update({
+      where: { id: plazaVacia.id },
+      data: { personaId: input.personaId, rolRequerido: rolFinal },
+    });
+    plazaId = plazaVacia.id;
+  } else {
+    const ultima = await prisma.plazaDotacion.findFirst({
+      where: { dotacionId },
+      orderBy: { numero: 'desc' },
+      select: { numero: true },
+    });
+    const numero = (ultima?.numero ?? 0) + 1;
+    const nueva = await prisma.plazaDotacion.create({
+      data: {
+        dotacionId,
+        numero,
+        nombre: `${dotacion.codigo}-${numero}`,
+        rolRequerido: input.rolEnDotacion,
+        personaId: input.personaId,
+      },
+      select: { id: true },
+    });
+    plazaId = nueva.id;
+  }
+
+  const plaza = await prisma.plazaDotacion.findUniqueOrThrow({
+    where: { id: plazaId },
+    select: plazaPersonalSelect,
+  });
+  if (!plaza.persona) {
+    throw new Error(`Estado inconsistente: plaza ${plazaId} sin persona tras asignar`);
+  }
+  return {
+    id: plaza.id,
+    rolEnDotacion: plaza.rolRequerido ?? '',
+    turnoInicioPrev: null,
+    turnoFinPrev: null,
+    asiste: null,
+    persona: {
+      id: plaza.persona.id,
+      nombreCompleto: plaza.persona.nombreCompleto,
+      tipo: plaza.persona.tipo as AsignacionPersonalItem['persona']['tipo'],
+      titulacion: plaza.persona.titulacion?.nombre ?? null,
+      telefono: plaza.persona.telefono,
+    },
+  };
 }
 
 /**
- * Elimina físicamente la asignación de una persona a una dotación.
+ * Libera la plaza que ocupa una persona dentro de una dotación (personaId=null).
+ * No elimina la plaza — queda disponible para reasignar.
  */
 export async function desasignarPersona(dotacionId: number, personaId: number): Promise<void> {
-  const asignacion = await prisma.asignacionPersonalDotacion.findUnique({
-    where: { dotacionId_personaId: { dotacionId, personaId } },
+  const plaza = await prisma.plazaDotacion.findFirst({
+    where: { dotacionId, personaId },
+    orderBy: { numero: 'asc' },
     select: { id: true },
   });
-  if (!asignacion) {
+  if (!plaza) {
     throw new Error(`No existe asignación activa para persona ${personaId} en dotación ${dotacionId}`);
   }
-  await prisma.asignacionPersonalDotacion.delete({ where: { id: asignacion.id } });
+  await prisma.plazaDotacion.update({
+    where: { id: plaza.id },
+    data: { personaId: null },
+  });
 }
 
 /**

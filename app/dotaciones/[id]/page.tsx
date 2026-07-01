@@ -79,6 +79,9 @@ export default function DotacionDetallePage() {
   const [errorAsignacion, setErrorAsignacion] = useState<string | null>(null);
   const [cambiandoEstado, setCambiandoEstado] = useState(false);
   const [desasignando, setDesasignando] = useState<number | null>(null);
+  // Contador para forzar recarga de PlazasSeccion tras asignar/desasignar
+  // desde las secciones vecinas — ambas escriben ya sobre PlazaDotacion.
+  const [plazasRefreshTick, setPlazasRefreshTick] = useState(0);
 
   useEffect(() => {
     if (!dotacionId || isNaN(dotacionId)) { setNoEncontrada(true); setCargando(false); return; }
@@ -158,6 +161,7 @@ export default function DotacionDetallePage() {
       const resDotacion = await fetch(`/api/dotaciones/${dotacionId}`);
       const dataDotacion = await resDotacion.json();
       setDotacion(dataDotacion.data);
+      setPlazasRefreshTick((t) => t + 1);
       setPersonaSeleccionada('');
       setRolSeleccionado('');
       // Reponer la propuesta de turno tras cada asignación
@@ -186,6 +190,7 @@ export default function DotacionDetallePage() {
       const res = await fetch(`/api/dotaciones/${dotacionId}/asignaciones?personaId=${personaId}`, { method: 'DELETE' });
       if (!res.ok) { const json = await res.json(); throw new Error(json.error ?? `Error ${res.status}`); }
       setDotacion((prev) => prev ? { ...prev, personal: prev.personal.filter((p) => p.persona.id !== personaId) } : prev);
+      setPlazasRefreshTick((t) => t + 1);
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Error al desasignar');
     } finally {
@@ -454,6 +459,14 @@ export default function DotacionDetallePage() {
         dotacionId={dotacionId}
         eventoId={dotacion.evento.id}
         personalDisponible={personalDisponible}
+        refreshTick={plazasRefreshTick}
+        onPlazasChanged={async () => {
+          const res = await fetch(`/api/dotaciones/${dotacionId}`);
+          if (res.ok) {
+            const json = await res.json();
+            setDotacion(json.data);
+          }
+        }}
       />
 
       {/* F1.7 — Material y walkies se gestionan en /eventos/[id]/control-material */}
@@ -489,10 +502,14 @@ function PlazasSeccion({
   dotacionId,
   eventoId,
   personalDisponible,
+  refreshTick,
+  onPlazasChanged,
 }: {
   dotacionId: number;
   eventoId: number;
   personalDisponible: PersonaListItem[];
+  refreshTick: number;
+  onPlazasChanged: () => void | Promise<void>;
 }) {
   const [plazas, setPlazas] = useState<PlazaApiItem[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -514,7 +531,7 @@ function PlazasSeccion({
     }
   }, [dotacionId]);
 
-  useEffect(() => { cargarPlazas(); }, [cargarPlazas]);
+  useEffect(() => { cargarPlazas(); }, [cargarPlazas, refreshTick]);
 
   async function actualizar(
     plazaId: number,
@@ -532,6 +549,11 @@ function PlazasSeccion({
         throw new Error(j.error ?? `Error ${res.status}`);
       }
       await cargarPlazas();
+      // Los cambios de personaId afectan al contador y a la sección "Personal
+      // asignado" del padre, que también lee de plazas.
+      if (Object.prototype.hasOwnProperty.call(cambios, 'personaId')) {
+        await onPlazasChanged();
+      }
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Error al actualizar plaza');
     } finally {
