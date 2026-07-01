@@ -239,7 +239,8 @@ function TarjetaDotacion({
   const router = useRouter();
   const personalCubierto = dotacion.numeroPersonasAsignadas >= dotacion.personalMinimo;
   const enIntervencion = dotacion.estado === 'CL2_EN_INTERVENCION';
-  const puedeLiberar = !!onLiberar && enIntervencion;
+  const enCamino = dotacion.estado === 'CL1_EN_CAMINO';
+  const puedeLiberar = !!onLiberar && (enIntervencion || enCamino);
 
   function clickLiberar(e: React.MouseEvent) {
     e.stopPropagation();
