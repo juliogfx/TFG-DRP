@@ -25,6 +25,7 @@ const plantillaSelect = {
   tipoEvento: { select: { id: true, nombre: true, codigo: true } },
   empresa: { select: { id: true, nombre: true, codigo: true } },
   posiciones: { select: { id: true } },
+  dimensionamiento: { select: { id: true, incluida: true } },
 } as const;
 
 function serializar(p: {
@@ -40,6 +41,7 @@ function serializar(p: {
   tipoEvento: { id: number; nombre: string; codigo: string } | null;
   empresa: { id: number; nombre: string; codigo: string };
   posiciones: { id: number }[];
+  dimensionamiento: { id: number; incluida: boolean }[];
 }): PlantillaListItem {
   return {
     id: p.id,
@@ -54,6 +56,8 @@ function serializar(p: {
     tipoEvento: p.tipoEvento,
     empresa: p.empresa,
     numeroPosiciones: p.posiciones.length,
+    numeroFilasDim: p.dimensionamiento.length,
+    numeroDotacionesActivas: p.dimensionamiento.filter((d) => d.incluida).length,
   };
 }
 
@@ -183,8 +187,10 @@ export async function saveDimensionamientoDePlantilla(
  * Aplica una plantilla a un evento (F1.3). En una sola transacción:
  *   - Para cada PlantillaPosicion crea una Posicion en el evento
  *     (codigoQr = `${eventoId}-${nombreSugerido}`).
- *   - Para cada Posicion crea una Dotacion con el mismo nombre y tipo
- *     derivado del puesto. Estado inicial CL0_DISPONIBLE.
+ *   - Si `crearDotaciones` es true, crea también una Dotacion por
+ *     posición (nuevo flujo: la creación de dotaciones se difiere hasta
+ *     que el coordinador confirme el dimensionamiento).
+ *   - Copia PlantillaDimensionamiento → DimensionamientoEvento.
  *
  * Idempotencia: el codigoQr de Posicion es UNIQUE — si ya existe una
  * posición con ese codigoQr el create fallará. Por eso primero verifica
@@ -193,6 +199,7 @@ export async function saveDimensionamientoDePlantilla(
 export async function aplicarPlantillaAEvento(
   plantillaId: number,
   eventoId: number,
+  crearDotaciones: boolean = false,
 ): Promise<AplicarPlantillaResult> {
   const plantilla = await prisma.plantillaEvento.findUnique({
     where: { id: plantillaId },
@@ -264,33 +271,37 @@ export async function aplicarPlantillaAEvento(
       });
       posicionesCreadas++;
 
-      const tipo = tipoDotacionDePuesto(pp.puesto.nombre, nombre);
-      // F1.4 — pre-rellenar controlMaterial con la plantilla del tipo,
-      // salvo DELTA (material variable según enfermero).
-      const propuestaMaterial = esDotacionDelta(nombre)
-        ? null
-        : getMaterialEstandarParaTipo(tipo);
-      await tx.dotacion.create({
-        data: {
-          eventoId,
-          codigo: nombre,
-          tipo,
-          personalMinimo: pp.personalMinimo,
-          posicionId: posicion.id,
-          estado: 'CL0_DISPONIBLE',
-          ...(propuestaMaterial !== null && { controlMaterial: propuestaMaterial as object }),
-        },
-      });
-      dotacionesCreadas++;
+      if (crearDotaciones) {
+        const tipo = tipoDotacionDePuesto(pp.puesto.nombre, nombre);
+        // F1.4 — pre-rellenar controlMaterial con la plantilla del tipo,
+        // salvo DELTA (material variable según enfermero).
+        const propuestaMaterial = esDotacionDelta(nombre)
+          ? null
+          : getMaterialEstandarParaTipo(tipo);
+        await tx.dotacion.create({
+          data: {
+            eventoId,
+            codigo: nombre,
+            tipo,
+            personalMinimo: pp.personalMinimo,
+            posicionId: posicion.id,
+            estado: 'CL0_DISPONIBLE',
+            ...(propuestaMaterial !== null && { controlMaterial: propuestaMaterial as object }),
+          },
+        });
+        dotacionesCreadas++;
+      }
     }
 
     // Opción B — si la plantilla tiene dimensionamiento guardado, copiarlo al evento.
     // Casamos por código de dotación (nombre de la fila == codigo de la dotación).
     if (plantilla.dimensionamiento.length > 0) {
-      const dotacionesEvento = await tx.dotacion.findMany({
-        where: { eventoId, deletedAt: null },
-        select: { id: true, codigo: true },
-      });
+      const dotacionesEvento = crearDotaciones
+        ? await tx.dotacion.findMany({
+            where: { eventoId, deletedAt: null },
+            select: { id: true, codigo: true },
+          })
+        : [];
       const idPorCodigo = new Map(dotacionesEvento.map((d) => [d.codigo, d.id]));
 
       await tx.dimensionamientoEvento.createMany({
@@ -311,4 +322,110 @@ export async function aplicarPlantillaAEvento(
   });
 
   return { eventoId, posicionesCreadas, dotacionesCreadas };
+}
+
+/**
+ * Opción B — Copia solo el dimensionamiento de una plantilla a un evento.
+ * NO crea Posiciones ni Dotaciones. Se usa como paso previo a la pantalla
+ * de dimensionamiento: el coordinador ajusta la tabla y al confirmar se
+ * crean las Dotaciones marcadas como incluida=true.
+ *
+ * El evento debe no tener aún filas de DimensionamientoEvento; si las
+ * tuviera, se lanza para no perder datos.
+ */
+export async function aplicarDimensionamientoAEvento(
+  plantillaId: number,
+  eventoId: number,
+): Promise<{ eventoId: number; filasCreadas: number }> {
+  const plantilla = await prisma.plantillaEvento.findUnique({
+    where: { id: plantillaId },
+    select: {
+      id: true,
+      dimensionamiento: true,
+    },
+  });
+  if (!plantilla) {
+    const err: Error & { code?: string } = new Error(`No existe plantilla con id ${plantillaId}`);
+    err.code = 'P2025';
+    throw err;
+  }
+
+  const evento = await prisma.evento.findFirst({
+    where: { id: eventoId, deletedAt: null },
+    select: { id: true, _count: { select: { dimensionamiento: true } } },
+  });
+  if (!evento) {
+    const err: Error & { code?: string } = new Error(`No existe evento con id ${eventoId}`);
+    err.code = 'P2025';
+    throw err;
+  }
+  if (evento._count.dimensionamiento > 0) {
+    throw new Error(
+      `El evento ${eventoId} ya tiene ${evento._count.dimensionamiento} filas de dimensionamiento. Aplicar sobre un evento sin dimensionamiento.`
+    );
+  }
+
+  if (plantilla.dimensionamiento.length === 0) {
+    return { eventoId, filasCreadas: 0 };
+  }
+
+  await prisma.dimensionamientoEvento.createMany({
+    data: plantilla.dimensionamiento.map((f) => ({
+      eventoId,
+      dotacionId: null,
+      nombre: f.nombre,
+      incluida: f.incluida,
+      med: f.med, due: f.due, cond: f.cond, tec: f.tec, socTec: f.socTec, otr: f.otr,
+      vehiculo: f.vehiculo, camillas: f.camillas, silla: f.silla,
+      bBasico: f.bBasico, bDue: f.bDue, bOxMed: f.bOxMed,
+      oxig: f.oxig, ampul: f.ampul, morfico: f.morfico,
+      monitor: f.monitor, pPantalla: f.pPantalla, portatil: f.portatil,
+      observ: f.observ,
+    })),
+  });
+
+  return { eventoId, filasCreadas: plantilla.dimensionamiento.length };
+}
+
+/**
+ * Deriva el TipoDotacion a partir del código de posición/dotación.
+ * Reglas alineadas con el seed (puestoParaPosicion + tipoDotacionDePuesto).
+ */
+export function tipoDotacionDeNombre(nombre: string): TipoDotacion {
+  if (nombre.startsWith('UVI'))                       return 'UVI';
+  if (nombre.startsWith('SVB'))                       return 'SVB';
+  if (nombre === 'BANQ.')                             return 'BANQUILLO';
+  if (nombre === 'CL.AV.')                            return 'AVANZADA';
+  if (nombre.startsWith('CL.'))                       return 'CLINICA';
+  if (nombre === 'UCO' || nombre === 'UCO1')          return 'UCO_UNIT';
+  if (nombre.startsWith('LIMA'))                      return 'LIMA';
+  return 'BOTIQUIN';
+}
+
+/**
+ * Plantilla de plazas por tipo de dotación. Determina cuántas plazas se
+ * crean y qué rol requerido tiene cada una. Alineado con el seed.
+ */
+export function plantillaPlazasPorTipo(tipo: TipoDotacion): {
+  numPlazas: number;
+  roles: Record<number, string | null>;
+} {
+  switch (tipo) {
+    case 'UVI':
+      return { numPlazas: 4, roles: { 1: 'CONDUCTOR', 2: 'TECNICO', 3: 'MEDICO', 4: 'ENFERMERO' } };
+    case 'AMBULANCIA':
+    case 'SVB':
+      return { numPlazas: 4, roles: { 1: 'CONDUCTOR', 2: 'TECNICO', 3: null, 4: null } };
+    case 'AVANZADA':
+    case 'CLINICA':
+      return { numPlazas: 4, roles: { 1: null, 2: null, 3: 'MEDICO', 4: 'ENFERMERO' } };
+    case 'BANQUILLO':
+      return { numPlazas: 4, roles: {} };
+    case 'LIMA':
+    case 'UCO_UNIT':
+      return { numPlazas: 2, roles: {} };
+    case 'BOTIQUIN':
+    default:
+      return { numPlazas: 4, roles: {} };
+  }
 }

@@ -9,6 +9,8 @@
 
 import { prisma } from '@/lib/db/prisma';
 import type { TipoDotacion } from '@prisma/client';
+import { tipoDotacionDeNombre, plantillaPlazasPorTipo } from '@/lib/db/plantillas';
+import { getMaterialEstandarParaTipo, esDotacionDelta } from '@/lib/db/plantilla-material';
 
 export interface PlazaItem {
   id: number;
@@ -313,4 +315,88 @@ export async function saveDimensionamientoEvento(
     });
   });
   return getDimensionamientoByEvento(eventoId);
+}
+
+/**
+ * Confirma el dimensionamiento del evento: para cada fila marcada como
+ * incluida=true crea (si no existe ya) una Dotacion + sus PlazaDotacion.
+ * Si la dotación ya existe, actualiza `personalMinimo` con el total RRHH
+ * calculado. Devuelve el nº de dotaciones y plazas creadas.
+ *
+ * No borra dotaciones existentes aunque estén marcadas como incluida=false
+ * en el dimensionamiento — la eliminación es una acción explícita del
+ * coordinador desde la pantalla de dotaciones.
+ */
+export async function confirmarDimensionamientoEvento(
+  eventoId: number,
+): Promise<{ dotacionesCreadas: number; plazasCreadas: number }> {
+  const filas = await prisma.dimensionamientoEvento.findMany({
+    where: { eventoId, incluida: true },
+    orderBy: { id: 'asc' },
+  });
+
+  const dotacionesExistentes = await prisma.dotacion.findMany({
+    where: { eventoId, deletedAt: null },
+    select: { id: true, codigo: true },
+  });
+  const idPorCodigo = new Map(dotacionesExistentes.map((d) => [d.codigo, d.id]));
+
+  let dotacionesCreadas = 0;
+  let plazasCreadas = 0;
+
+  await prisma.$transaction(async (tx) => {
+    for (const f of filas) {
+      const personalMinimo = f.med + f.due + f.cond + f.tec + f.socTec + f.otr;
+      const idExistente = idPorCodigo.get(f.nombre);
+
+      if (idExistente !== undefined) {
+        await tx.dotacion.update({
+          where: { id: idExistente },
+          data: { personalMinimo },
+        });
+        await tx.dimensionamientoEvento.update({
+          where: { id: f.id },
+          data: { dotacionId: idExistente },
+        });
+        continue;
+      }
+
+      const tipo: TipoDotacion = tipoDotacionDeNombre(f.nombre);
+      const propuestaMaterial = esDotacionDelta(f.nombre)
+        ? null
+        : getMaterialEstandarParaTipo(tipo);
+      const nuevaDot = await tx.dotacion.create({
+        data: {
+          eventoId,
+          codigo: f.nombre,
+          tipo,
+          personalMinimo,
+          estado: 'CL0_DISPONIBLE',
+          ...(propuestaMaterial !== null && { controlMaterial: propuestaMaterial as object }),
+        },
+        select: { id: true },
+      });
+      dotacionesCreadas++;
+
+      const { numPlazas, roles } = plantillaPlazasPorTipo(tipo);
+      for (let numero = 1; numero <= numPlazas; numero++) {
+        await tx.plazaDotacion.create({
+          data: {
+            dotacionId: nuevaDot.id,
+            numero,
+            nombre: `${f.nombre}-${numero}`,
+            rolRequerido: roles[numero] ?? null,
+          },
+        });
+        plazasCreadas++;
+      }
+
+      await tx.dimensionamientoEvento.update({
+        where: { id: f.id },
+        data: { dotacionId: nuevaDot.id },
+      });
+    }
+  });
+
+  return { dotacionesCreadas, plazasCreadas };
 }

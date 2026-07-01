@@ -12,7 +12,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { EventoDetalle } from '@/types/evento';
 
@@ -64,12 +64,14 @@ function totalRRHH(f: Fila): number {
 
 export default function DimensionamientoPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const eventoId = Number(params.id);
 
   const [filas, setFilas] = useState<Fila[]>([]);
   const [evento, setEvento] = useState<EventoDetalle | null>(null);
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
   const [guardandoPlantilla, setGuardandoPlantilla] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -107,8 +109,7 @@ export default function DimensionamientoPage() {
     });
   }
 
-  async function guardar() {
-    setGuardando(true);
+  async function guardar(): Promise<boolean> {
     setError(null);
     setInfo(null);
     try {
@@ -120,11 +121,39 @@ export default function DimensionamientoPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
       setFilas(json.data);
-      setInfo('Dimensionamiento guardado correctamente.');
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al guardar');
-    } finally {
-      setGuardando(false);
+      return false;
+    }
+  }
+
+  async function guardarBorrador() {
+    setGuardando(true);
+    const ok = await guardar();
+    if (ok) setInfo('Borrador guardado. No se han creado dotaciones todavía.');
+    setGuardando(false);
+  }
+
+  async function confirmarDimensionamiento() {
+    setConfirmando(true);
+    setError(null);
+    setInfo(null);
+    const ok = await guardar();
+    if (!ok) {
+      setConfirmando(false);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/eventos/${eventoId}/dimensionamiento/confirmar`, {
+        method: 'POST',
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
+      router.push(`/eventos/${eventoId}/asignacion`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al confirmar');
+      setConfirmando(false);
     }
   }
 
@@ -372,17 +401,24 @@ export default function DimensionamientoPage() {
         <div className="flex gap-2">
           <button
             onClick={guardarComoPlantilla}
-            disabled={guardando || guardandoPlantilla || cargando}
+            disabled={guardando || confirmando || guardandoPlantilla || cargando}
             className="border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50"
           >
             {guardandoPlantilla ? 'Guardando plantilla…' : 'Guardar como plantilla'}
           </button>
           <button
-            onClick={guardar}
-            disabled={guardando || cargando}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50"
+            onClick={guardarBorrador}
+            disabled={guardando || confirmando || cargando}
+            className="border border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50"
           >
-            {guardando ? 'Guardando…' : 'Guardar dimensionamiento'}
+            {guardando ? 'Guardando…' : 'Guardar borrador'}
+          </button>
+          <button
+            onClick={confirmarDimensionamiento}
+            disabled={guardando || confirmando || cargando}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50"
+          >
+            {confirmando ? 'Confirmando…' : 'Confirmar dimensionamiento'}
           </button>
         </div>
       </div>
@@ -398,7 +434,7 @@ export default function DimensionamientoPage() {
         <div className="text-center py-12 text-slate-500">Cargando…</div>
       ) : filas.length === 0 ? (
         <p className="text-sm text-slate-400 text-center py-12 border border-dashed border-slate-200 rounded-lg">
-          No hay dotaciones en este evento todavía.
+          Este evento no tiene filas de dimensionamiento. Selecciona una plantilla al crear el evento para pre-cargarlas.
         </p>
       ) : (
         <>

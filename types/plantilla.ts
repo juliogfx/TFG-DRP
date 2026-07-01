@@ -20,6 +20,8 @@ export interface PlantillaListItem {
   tipoEvento: { id: number; nombre: string; codigo: string } | null;
   empresa: { id: number; nombre: string; codigo: string };
   numeroPosiciones: number;
+  numeroFilasDim: number;
+  numeroDotacionesActivas: number;
 }
 
 export interface CreatePlantillaInput {

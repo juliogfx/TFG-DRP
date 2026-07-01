@@ -19,7 +19,14 @@ import type { CreateEventoInput } from '@/types/evento';
 interface OpcionCatalogo { id: number; nombre: string; codigo: string; }
 interface OpcionEmpresa extends OpcionCatalogo { tipo: 'PROMOTOR' | 'CONTRATADA' | 'FACULTATIVOS'; }
 interface OpcionEquipo { id: number; nombre: string; codigo: string; deporte: string; }
-interface OpcionPlantilla { id: number; nombre: string; descripcion: string | null; numeroPosiciones: number }
+interface OpcionPlantilla {
+  id: number;
+  nombre: string;
+  descripcion: string | null;
+  numeroPosiciones: number;
+  numeroFilasDim: number;
+  numeroDotacionesActivas: number;
+}
 
 export default function NuevoEventoPage() {
   return (
@@ -80,7 +87,12 @@ function NuevoEventoContent() {
         setTiposEvento(dataTipos.data ?? []);
         setEmpresas(dataEmpresas.data ?? []);
         setEquipos(dataEquipos.data ?? []);
-        setPlantillas(dataPlant.data ?? []);
+        // El selector solo muestra plantillas con dimensionamiento — las
+        // plantillas del F1.3 antiguo (posiciones sin dimensionamiento) no
+        // encajan en el nuevo flujo (crear evento → dimensionamiento).
+        const plantillasConDim = ((dataPlant.data ?? []) as OpcionPlantilla[])
+          .filter((p) => p.numeroFilasDim > 0);
+        setPlantillas(plantillasConDim);
       } catch {
         setError('Error al cargar los datos del formulario. Recarga la página.');
       } finally {
@@ -114,22 +126,22 @@ function NuevoEventoContent() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
 
-      // F1.3 — si el usuario eligió plantilla, la aplicamos al evento
-      // recién creado. El evento queda creado igualmente si falla, así
-      // que devolvemos al usuario a /eventos con el aviso.
+      // Nuevo flujo (Opción B): si el usuario eligió plantilla, solo
+      // pre-cargamos el dimensionamiento. Las Dotaciones se crearán en
+      // la pantalla de dimensionamiento al pulsar "Confirmar".
       const eventoIdCreado = json.data?.id;
       if (plantillaId && eventoIdCreado) {
-        const resAplicar = await fetch(`/api/plantillas/${plantillaId}/aplicar`, {
+        const resAplicar = await fetch(`/api/plantillas/${plantillaId}/aplicar-dimensionamiento`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ eventoId: eventoIdCreado }),
         });
         if (!resAplicar.ok) {
           const errJson = await resAplicar.json();
-          throw new Error(`Evento creado pero no se aplicó la plantilla: ${errJson.error ?? `Error ${resAplicar.status}`}`);
+          throw new Error(`Evento creado pero no se pre-cargó el dimensionamiento: ${errJson.error ?? `Error ${resAplicar.status}`}`);
         }
       }
-      router.push('/eventos');
+      router.push(eventoIdCreado ? `/eventos/${eventoIdCreado}/dimensionamiento` : '/eventos');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al crear el evento');
     } finally {
@@ -253,15 +265,15 @@ function NuevoEventoContent() {
               onChange={(e) => setPlantillaId(e.target.value ? Number(e.target.value) : '')}
               className="w-full border border-blue-300 rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">— Sin plantilla (evento vacío) —</option>
+              <option value="">— Sin plantilla (dimensionamiento vacío) —</option>
               {plantillas.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.nombre} ({p.numeroPosiciones} pos.){p.descripcion ? ` — ${p.descripcion}` : ''}
+                  {p.nombre} ({p.numeroDotacionesActivas} dotaciones activas){p.descripcion ? ` — ${p.descripcion}` : ''}
                 </option>
               ))}
             </select>
             <p className="text-xs text-blue-700 mt-1">
-              Al seleccionar plantilla, tras crear el evento se generan automáticamente las posiciones y dotaciones definidas.
+              Al seleccionar plantilla, se pre-carga el dimensionamiento. Las dotaciones se crearán cuando confirmes el dimensionamiento en la siguiente pantalla.
             </p>
           </div>
         )}
