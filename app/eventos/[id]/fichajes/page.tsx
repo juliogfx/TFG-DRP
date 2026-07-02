@@ -32,6 +32,18 @@ function isoToHHmm(iso: string | null): string {
 }
 
 /**
+ * Convierte "HH:mm" a minutos-desde-medianoche. Devuelve null si la cadena
+ * está vacía o no es un formato válido. Usado para comparar horas en la
+ * misma unidad y calcular diferencias en tiempo real.
+ */
+function hhmmAMinutos(hhmm: string): number | null {
+  if (!hhmm) return null;
+  const [hh, mm] = hhmm.split(':').map((n) => parseInt(n, 10));
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+  return hh * 60 + mm;
+}
+
+/**
  * Compone un ISO 8601 a partir del fechaYYYYMMDD del evento y una hora
  * HH:mm. Si la hora es vacía devuelve null (interpretado como borrado).
  */
@@ -54,6 +66,13 @@ export default function FichajesEventoPage() {
   const [error, setError] = useState<string | null>(null);
   const [filtroDotacion, setFiltroDotacion] = useState<number | 'TODAS'>('TODAS');
   const [guardandoIds, setGuardandoIds] = useState<Set<number>>(new Set());
+  // Estado local de horas por plaza: qué muestra el input y sobre lo que se
+  // recalculan LLEG. TARDÍA, SAL. TARDÍA y HORAS en tiempo real. La primera
+  // carga inicializa cada plaza desde turnoInicioReal ?? turnoInicioPrev; a
+  // partir de ahí solo se actualiza cuando el usuario tipea o cuando llega
+  // una nueva fila del backend (no se sincroniza en cada save, para no pisar
+  // ediciones en curso en otras filas).
+  const [horasLocales, setHorasLocales] = useState<Record<number, { entrada: string; salida: string }>>({});
 
   const cargar = useCallback(async () => {
     if (!eventoId || Number.isNaN(eventoId)) return;
@@ -79,6 +98,27 @@ export default function FichajesEventoPage() {
   }, [eventoId]);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  // Poblamos horasLocales solo con las filas nuevas — nunca sobrescribimos las
+  // que ya están, para no pisar ediciones del usuario cuando fichajes cambia
+  // por un save de otra fila.
+  useEffect(() => {
+    if (fichajes.length === 0) return;
+    setHorasLocales((prev) => {
+      let cambio = false;
+      const next = { ...prev };
+      for (const f of fichajes) {
+        if (!(f.asignacionId in next)) {
+          next[f.asignacionId] = {
+            entrada: isoToHHmm(f.turnoInicioReal ?? f.turnoInicioPrev),
+            salida: isoToHHmm(f.turnoFinReal ?? f.turnoFinPrev),
+          };
+          cambio = true;
+        }
+      }
+      return cambio ? next : prev;
+    });
+  }, [fichajes]);
 
   /**
    * Persistencia optimista de un campo del fichaje. Actualiza local primero
@@ -201,15 +241,26 @@ export default function FichajesEventoPage() {
                 const guardando = guardandoIds.has(f.asignacionId);
                 const asisteNo = f.asiste === false;
                 const fechaBase = evento?.fecha ?? new Date().toISOString().split('T')[0];
-                const entrada = isoToHHmm(f.turnoInicioReal ?? f.turnoInicioPrev);
-                const salida = isoToHHmm(f.turnoFinReal ?? f.turnoFinPrev);
-                // Horas en tiempo real (lo que muestra el backend ya está calculado,
-                // pero al editar local conviene recalcular antes del refetch).
+                const local = horasLocales[f.asignacionId] ?? { entrada: '', salida: '' };
+                // Todos los cálculos derivados se hacen en minutos-de-día contra
+                // el estado local (lo que se ve en el input), no contra el estado
+                // del servidor. Así LLEG. TARDÍA, SAL. TARDÍA y HORAS se recalculan
+                // en tiempo real mientras el usuario escribe.
+                const entradaMin = hhmmAMinutos(local.entrada);
+                const salidaMin = hhmmAMinutos(local.salida);
+                const prevInicioMin = hhmmAMinutos(isoToHHmm(f.turnoInicioPrev));
+                const prevFinMin = hhmmAMinutos(isoToHHmm(f.turnoFinPrev));
+                // LLEG. TARDÍA: entrada > previsto + 10 min de gracia.
+                const llegadaTardia = !asisteNo && entradaMin !== null && prevInicioMin !== null && entradaMin > prevInicioMin + 10;
+                // SAL. TARDÍA: salida > previsto (sin gracia).
+                const salidaTardia = !asisteNo && salidaMin !== null && prevFinMin !== null && salidaMin > prevFinMin;
+                // HORAS = (salida - entrada) en horas, 2 decimales. Solo si el
+                // rango es positivo (no cruzamos medianoche en el MVP).
                 const horas = (() => {
-                  if (!f.turnoInicioReal || !f.turnoFinReal) return null;
-                  const ms = new Date(f.turnoFinReal).getTime() - new Date(f.turnoInicioReal).getTime();
-                  if (ms <= 0) return null;
-                  return Math.round((ms / 3600000) * 100) / 100;
+                  if (asisteNo || entradaMin === null || salidaMin === null) return null;
+                  const diff = salidaMin - entradaMin;
+                  if (diff <= 0) return null;
+                  return Math.round((diff / 60) * 100) / 100;
                 })();
 
                 return (
@@ -281,8 +332,14 @@ export default function FichajesEventoPage() {
                       ) : (
                         <input
                           type="time"
-                          defaultValue={entrada}
-                          key={`in-${f.asignacionId}-${entrada}`}
+                          value={local.entrada}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setHorasLocales((prev) => ({
+                              ...prev,
+                              [f.asignacionId]: { ...(prev[f.asignacionId] ?? { entrada: '', salida: '' }), entrada: v },
+                            }));
+                          }}
                           onBlur={(e) => {
                             const nuevoHHmm = e.target.value;
                             const nuevoIso = nuevoHHmm ? hhmmAIso(fechaBase, nuevoHHmm) : null;
@@ -301,8 +358,14 @@ export default function FichajesEventoPage() {
                       ) : (
                         <input
                           type="time"
-                          defaultValue={salida}
-                          key={`out-${f.asignacionId}-${salida}`}
+                          value={local.salida}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setHorasLocales((prev) => ({
+                              ...prev,
+                              [f.asignacionId]: { ...(prev[f.asignacionId] ?? { entrada: '', salida: '' }), salida: v },
+                            }));
+                          }}
                           onBlur={(e) => {
                             const nuevoHHmm = e.target.value;
                             const nuevoIso = nuevoHHmm ? hhmmAIso(fechaBase, nuevoHHmm) : null;
@@ -316,10 +379,10 @@ export default function FichajesEventoPage() {
                       )}
                     </td>
                     <td className="px-2 py-1.5 text-center">
-                      {f.llegadaTardia ? <span className="text-orange-600 font-bold">⚠</span> : <span className="text-slate-300">—</span>}
+                      {llegadaTardia ? <span className="text-orange-600 font-bold">⚠</span> : <span className="text-slate-300">—</span>}
                     </td>
                     <td className="px-2 py-1.5 text-center">
-                      {f.salidaTardia ? <span className="text-orange-600 font-bold">⚠</span> : <span className="text-slate-300">—</span>}
+                      {salidaTardia ? <span className="text-orange-600 font-bold">⚠</span> : <span className="text-slate-300">—</span>}
                     </td>
                     <td className="px-2 py-1.5 text-center font-semibold text-slate-700">
                       {horas !== null ? horas.toFixed(2) : <span className="text-slate-300">—</span>}
