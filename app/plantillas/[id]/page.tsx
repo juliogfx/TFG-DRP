@@ -207,70 +207,74 @@ export default function PlantillaDetallePage() {
   }
 
   return (
-    <div>
-      <div className="mb-4">
-        <Link href="/plantillas" className="text-sm text-slate-500 hover:text-slate-700">← Volver a plantillas</Link>
-      </div>
-
-      <div className="flex items-start justify-between mb-6 gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-slate-900 font-mono">
-            {plantilla?.nombre ?? `Plantilla #${plantillaId}`}
-          </h1>
-          {plantilla?.descripcion && (
-            <p className="text-sm text-slate-500 mt-1">{plantilla.descripcion}</p>
-          )}
-          {plantilla && (
-            <div className="text-xs text-slate-500 mt-2 space-x-3">
-              <span>Tipo: <b>{plantilla.tipoEvento?.nombre ?? '—'}</b></span>
-              <span>Ubicación: <b>{plantilla.ubicacion?.nombre ?? '—'}</b></span>
-              <span>Empresa: <b>{plantilla.empresa.nombre}</b></span>
-              <span>Dotaciones activas: <b>{plantilla.numeroDotacionesActivas}</b></span>
-            </div>
-          )}
+    <div className="h-[calc(100vh-64px)] flex flex-col overflow-hidden">
+      <div className="flex-none">
+        <div className="mb-4">
+          <Link href="/plantillas" className="text-sm text-slate-500 hover:text-slate-700">← Volver a plantillas</Link>
         </div>
-        <div className="flex gap-2 shrink-0">
-          <button
-            onClick={añadirFila}
-            disabled={cargando || guardando}
-            className="border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50"
-          >
-            + Añadir fila
-          </button>
-          <button
-            onClick={guardar}
-            disabled={cargando || guardando || borrando}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50"
-          >
-            {guardando ? 'Guardando…' : 'Guardar cambios'}
-          </button>
-          <button
-            onClick={eliminarPlantilla}
-            disabled={cargando || guardando || borrando}
-            className="border border-red-300 bg-red-50 hover:bg-red-100 text-red-700 text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50"
-          >
-            {borrando ? 'Eliminando…' : 'Eliminar plantilla'}
-          </button>
-        </div>
-      </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-4">{error}</div>
-      )}
-      {info && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-md mb-4">{info}</div>
-      )}
+        <div className="flex items-start justify-between mb-4 gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold text-slate-900 font-mono">
+              {plantilla?.nombre ?? `Plantilla #${plantillaId}`}
+            </h1>
+            {plantilla?.descripcion && (
+              <p className="text-sm text-slate-500 mt-1">{plantilla.descripcion}</p>
+            )}
+            {plantilla && (
+              <div className="text-xs text-slate-500 mt-2 space-x-3">
+                <span>Tipo: <b>{plantilla.tipoEvento?.nombre ?? '—'}</b></span>
+                <span>Ubicación: <b>{plantilla.ubicacion?.nombre ?? '—'}</b></span>
+                <span>Empresa: <b>{plantilla.empresa.nombre}</b></span>
+                <span>Dotaciones activas: <b>{plantilla.numeroDotacionesActivas}</b></span>
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={añadirFila}
+              disabled={cargando || guardando}
+              className="border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50"
+            >
+              + Añadir fila
+            </button>
+            <button
+              onClick={guardar}
+              disabled={cargando || guardando || borrando}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50"
+            >
+              {guardando ? 'Guardando…' : 'Guardar cambios'}
+            </button>
+            <button
+              onClick={eliminarPlantilla}
+              disabled={cargando || guardando || borrando}
+              className="border border-red-300 bg-red-50 hover:bg-red-100 text-red-700 text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50"
+            >
+              {borrando ? 'Eliminando…' : 'Eliminar plantilla'}
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-3">{error}</div>
+        )}
+        {info && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-md mb-3">{info}</div>
+        )}
+      </div>
 
       {cargando ? (
-        <div className="text-center py-12 text-slate-500">Cargando…</div>
+        <div className="flex-1 flex items-center justify-center text-slate-500">Cargando…</div>
       ) : filas.length === 0 ? (
-        <p className="text-sm text-slate-400 text-center py-12 border border-dashed border-slate-200 rounded-lg">
-          Esta plantilla no tiene dimensionamiento aún. Pulsa <b>+ Añadir fila</b> para empezar.
-        </p>
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-sm text-slate-400 text-center py-12 px-8 border border-dashed border-slate-200 rounded-lg">
+            Esta plantilla no tiene dimensionamiento aún. Pulsa <b>+ Añadir fila</b> para empezar.
+          </p>
+        </div>
       ) : (
-        <div className="overflow-auto rounded-lg border border-slate-200" style={{ maxHeight: 'calc(100vh - 240px)' }}>
-          <table className="w-full text-xs">
-            <thead className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 shadow-sm">
+        <div className="flex-1 overflow-auto rounded-lg border border-slate-200">
+          <table className="w-full text-xs border-separate border-spacing-0">
+            <thead className="sticky top-0 z-20 bg-slate-50 shadow-[0_1px_0_0_rgb(226_232_240)]">
               <tr>
                 <th className="sticky left-0 z-30 bg-slate-50 text-left px-2 py-2 font-medium text-slate-600 min-w-[120px]">DOTACIÓN</th>
                 <th className="sticky left-[120px] z-30 bg-slate-50 text-center px-2 py-2 font-medium text-slate-600 min-w-[60px]">SI/NO</th>
@@ -288,11 +292,11 @@ export default function PlantillaDetallePage() {
                 <th className="px-2 py-2"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody>
               {filas.map((f, idx) => {
                 const rowCls = f.incluida ? '' : 'opacity-50';
                 return (
-                  <tr key={`${f.nombre}-${idx}`} className={`hover:bg-slate-50 ${rowCls}`}>
+                  <tr key={`${f.nombre}-${idx}`} className={`hover:bg-slate-50 ${rowCls} [&>td]:border-b [&>td]:border-slate-100`}>
                     <td className="sticky left-0 z-10 bg-white px-2 py-1.5 font-mono font-semibold text-slate-800 min-w-[120px]">
                       <input
                         type="text"
@@ -342,9 +346,11 @@ export default function PlantillaDetallePage() {
                   </tr>
                 );
               })}
-              <tr className="sticky bottom-0 z-10 bg-slate-100 font-semibold text-slate-800 shadow-[0_-1px_0_0_rgb(226_232_240)]">
-                <td className="sticky left-0 z-20 bg-slate-100 px-2 py-2 min-w-[120px]">TOTALES (incluidas)</td>
-                <td className="sticky left-[120px] z-20 bg-slate-100 min-w-[60px]"></td>
+            </tbody>
+            <tfoot className="sticky bottom-0 z-20 bg-slate-100 shadow-[0_-1px_0_0_rgb(226_232_240)]">
+              <tr className="font-semibold text-slate-800">
+                <td className="sticky left-0 z-30 bg-slate-100 px-2 py-2 min-w-[120px]">TOTALES (incluidas)</td>
+                <td className="sticky left-[120px] z-30 bg-slate-100 min-w-[60px]"></td>
                 <td className="text-center">{totales.med}</td>
                 <td className="text-center">{totales.due}</td>
                 <td className="text-center">{totales.cond}</td>
@@ -365,7 +371,7 @@ export default function PlantillaDetallePage() {
                 <td></td>
                 <td></td>
               </tr>
-            </tbody>
+            </tfoot>
           </table>
         </div>
       )}

@@ -351,11 +351,11 @@ export default function DimensionamientoPage() {
   function renderSeccion(titulo: string, lista: Fila[], tot: ReturnType<typeof totalesSeccion>) {
     if (lista.length === 0) return null;
     return (
-      <div className="mb-6">
-        <h2 className="text-sm font-semibold text-slate-700 mb-2">{titulo}</h2>
-        <div className="overflow-auto rounded-lg border border-slate-200" style={{ maxHeight: 'calc(100vh - 240px)' }}>
-          <table className="w-full text-xs">
-            <thead className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 shadow-sm">
+      <div className="mb-6 last:mb-0">
+        <h2 className="text-sm font-semibold text-slate-700 mb-2 sticky left-0">{titulo}</h2>
+        <div className="rounded-lg border border-slate-200">
+          <table className="w-full text-xs border-separate border-spacing-0">
+            <thead className="sticky top-0 z-20 bg-slate-50 shadow-[0_1px_0_0_rgb(226_232_240)]">
               <tr>
                 <th className="sticky left-0 z-30 bg-slate-50 text-left px-2 py-2 font-medium text-slate-600 min-w-[120px]">DOTACIÓN</th>
                 <th className="sticky left-[120px] z-30 bg-slate-50 text-center px-2 py-2 font-medium text-slate-600 min-w-[60px]">SI/NO</th>
@@ -372,12 +372,12 @@ export default function DimensionamientoPage() {
                 <th className="text-left px-2 py-2 font-medium text-slate-600">OBSERV.</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody>
               {lista.map((f) => {
                 const idx = filas.indexOf(f);
                 const rowCls = f.incluida ? '' : 'opacity-50';
                 return (
-                  <tr key={`${f.dotacionId ?? 'x'}-${f.nombre}`} className={`hover:bg-slate-50 ${rowCls}`}>
+                  <tr key={`${f.dotacionId ?? 'x'}-${f.nombre}`} className={`hover:bg-slate-50 ${rowCls} [&>td]:border-b [&>td]:border-slate-100`}>
                     <td className="sticky left-0 z-10 bg-white px-2 py-1.5 font-mono font-semibold text-slate-800 min-w-[120px]">{f.nombre}</td>
                     <td className="sticky left-[120px] z-10 bg-white px-2 py-1.5 text-center min-w-[60px]">
                       <input
@@ -411,9 +411,11 @@ export default function DimensionamientoPage() {
                   </tr>
                 );
               })}
-              <tr className="sticky bottom-0 z-10 bg-slate-100 font-semibold text-slate-800 shadow-[0_-1px_0_0_rgb(226_232_240)]">
-                <td className="sticky left-0 z-20 bg-slate-100 px-2 py-2 min-w-[120px]">TOTALES</td>
-                <td className="sticky left-[120px] z-20 bg-slate-100 min-w-[60px]"></td>
+            </tbody>
+            <tfoot className="sticky bottom-0 z-20 bg-slate-100 shadow-[0_-1px_0_0_rgb(226_232_240)]">
+              <tr className="font-semibold text-slate-800">
+                <td className="sticky left-0 z-30 bg-slate-100 px-2 py-2 min-w-[120px]">TOTALES</td>
+                <td className="sticky left-[120px] z-30 bg-slate-100 min-w-[60px]"></td>
                 <td className="text-center">{tot.med}</td>
                 <td className="text-center">{tot.due}</td>
                 <td className="text-center">{tot.cond}</td>
@@ -433,7 +435,7 @@ export default function DimensionamientoPage() {
                 <td className="text-center">{tot.portatil}</td>
                 <td></td>
               </tr>
-            </tbody>
+            </tfoot>
           </table>
         </div>
       </div>
@@ -441,86 +443,92 @@ export default function DimensionamientoPage() {
   }
 
   return (
-    <div>
-      <div className="mb-4">
-        <Link href="/eventos" className="text-sm text-slate-500 hover:text-slate-700">← Volver a eventos</Link>
-      </div>
-
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Dimensionamiento</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{evento?.nombre || `Evento #${eventoId}`}</p>
+    <div className="h-[calc(100vh-64px)] flex flex-col overflow-hidden">
+      <div className="flex-none">
+        <div className="mb-4">
+          <Link href="/eventos" className="text-sm text-slate-500 hover:text-slate-700">← Volver a eventos</Link>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={guardarComoPlantilla}
-            disabled={guardando || confirmando || guardandoPlantilla || cargando}
-            className="border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50"
-          >
-            {guardandoPlantilla ? 'Guardando plantilla…' : 'Guardar como plantilla'}
-          </button>
-          <button
-            onClick={guardarBorrador}
-            disabled={guardando || confirmando || cargando}
-            className="border border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50"
-          >
-            {guardando ? 'Guardando…' : 'Guardar borrador'}
-          </button>
-          <button
-            onClick={confirmarDimensionamiento}
-            disabled={guardando || confirmando || cargando}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50"
-          >
-            {confirmando ? 'Confirmando…' : 'Confirmar dimensionamiento'}
-          </button>
-        </div>
-      </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-4">{error}</div>
-      )}
-      {info && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-md mb-4">{info}</div>
-      )}
-      {resultadoConfirm && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-md px-4 py-4 mb-6">
-          <div className="text-emerald-800 font-medium mb-3">
-            ✅ Dimensionamiento confirmado. Se han creado {resultadoConfirm.dotacionesCreadas} dotaciones con {resultadoConfirm.plazasCreadas} plazas.
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">Dimensionamiento</h1>
+            <p className="text-sm text-slate-500 mt-0.5">{evento?.nombre || `Evento #${eventoId}`}</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             <button
-              onClick={() => router.push(`/eventos/${eventoId}/asignacion`)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-md"
+              onClick={guardarComoPlantilla}
+              disabled={guardando || confirmando || guardandoPlantilla || cargando}
+              className="border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50"
             >
-              Asignar personal →
+              {guardandoPlantilla ? 'Guardando plantilla…' : 'Guardar como plantilla'}
             </button>
             <button
-              onClick={() => router.push('/eventos')}
-              className="border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-4 py-2 rounded-md"
+              onClick={guardarBorrador}
+              disabled={guardando || confirmando || cargando}
+              className="border border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50"
             >
-              Volver a eventos
+              {guardando ? 'Guardando…' : 'Guardar borrador'}
+            </button>
+            <button
+              onClick={confirmarDimensionamiento}
+              disabled={guardando || confirmando || cargando}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-md disabled:opacity-50"
+            >
+              {confirmando ? 'Confirmando…' : 'Confirmar dimensionamiento'}
             </button>
           </div>
         </div>
-      )}
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-3">{error}</div>
+        )}
+        {info && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-md mb-3">{info}</div>
+        )}
+        {resultadoConfirm && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-md px-4 py-4 mb-4">
+            <div className="text-emerald-800 font-medium mb-3">
+              ✅ Dimensionamiento confirmado. Se han creado {resultadoConfirm.dotacionesCreadas} dotaciones con {resultadoConfirm.plazasCreadas} plazas.
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => router.push(`/eventos/${eventoId}/asignacion`)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-md"
+              >
+                Asignar personal →
+              </button>
+              <button
+                onClick={() => router.push('/eventos')}
+                className="border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium px-4 py-2 rounded-md"
+              >
+                Volver a eventos
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {cargando ? (
-        <div className="text-center py-12 text-slate-500">Cargando…</div>
+        <div className="flex-1 flex items-center justify-center text-slate-500">Cargando…</div>
       ) : filas.length === 0 ? (
-        <p className="text-sm text-slate-400 text-center py-12 border border-dashed border-slate-200 rounded-lg">
-          Este evento no tiene filas de dimensionamiento. Selecciona una plantilla al crear el evento para pre-cargarlas.
-        </p>
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-sm text-slate-400 text-center py-12 px-8 border border-dashed border-slate-200 rounded-lg">
+            Este evento no tiene filas de dimensionamiento. Selecciona una plantilla al crear el evento para pre-cargarlas.
+          </p>
+        </div>
       ) : (
         <>
-          {renderSeccion('PISTA', pista, totPista)}
-          {renderSeccion('GRADA', grada, totGrada)}
-          {otras.length > 0 && renderSeccion(
-            pista.length === 0 && grada.length === 0 ? 'DOTACIONES' : 'SIN ZONA / OTRAS',
-            otras,
-            totOtras,
-          )}
+          <div className="flex-1 overflow-auto">
+            {renderSeccion('PISTA', pista, totPista)}
+            {renderSeccion('GRADA', grada, totGrada)}
+            {otras.length > 0 && renderSeccion(
+              pista.length === 0 && grada.length === 0 ? 'DOTACIONES' : 'SIN ZONA / OTRAS',
+              otras,
+              totOtras,
+            )}
+          </div>
 
-          <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 grid grid-cols-2 md:grid-cols-7 gap-3">
+          <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 grid grid-cols-2 md:grid-cols-7 gap-3 flex-none">
             <div><strong>TOTAL GENERAL</strong></div>
             <div>MED: {totGeneral.med}</div>
             <div>DUE: {totGeneral.due}</div>
