@@ -201,8 +201,8 @@ export default function FichajesEventoPage() {
                 const guardando = guardandoIds.has(f.asignacionId);
                 const asisteNo = f.asiste === false;
                 const fechaBase = evento?.fecha ?? new Date().toISOString().split('T')[0];
-                const entrada = isoToHHmm(f.turnoInicioReal);
-                const salida = isoToHHmm(f.turnoFinReal);
+                const entrada = isoToHHmm(f.turnoInicioReal ?? f.turnoInicioPrev);
+                const salida = isoToHHmm(f.turnoFinReal ?? f.turnoFinPrev);
                 // Horas en tiempo real (lo que muestra el backend ya está calculado,
                 // pero al editar local conviene recalcular antes del refetch).
                 const horas = (() => {
