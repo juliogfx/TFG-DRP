@@ -250,15 +250,24 @@ export default function FichajesEventoPage() {
                 const salidaMin = hhmmAMinutos(local.salida);
                 const prevInicioMin = hhmmAMinutos(isoToHHmm(f.turnoInicioPrev));
                 const prevFinMin = hhmmAMinutos(isoToHHmm(f.turnoFinPrev));
+                // Si la salida es anterior a la entrada asumimos que el turno
+                // cruza medianoche (ej. entrada 20:00, salida 00:01 → 4h 1min).
+                // Ajustamos la salida sumándole 24h para operar en la misma
+                // línea temporal. El mismo criterio aplica al par previsto.
+                const salidaAjustadaMin = entradaMin !== null && salidaMin !== null && salidaMin < entradaMin
+                  ? salidaMin + 1440
+                  : salidaMin;
+                const prevFinAjustadoMin = prevInicioMin !== null && prevFinMin !== null && prevFinMin < prevInicioMin
+                  ? prevFinMin + 1440
+                  : prevFinMin;
                 // LLEG. TARDÍA: entrada > previsto + 10 min de gracia.
                 const llegadaTardia = !asisteNo && entradaMin !== null && prevInicioMin !== null && entradaMin > prevInicioMin + 10;
-                // SAL. TARDÍA: salida > previsto (sin gracia).
-                const salidaTardia = !asisteNo && salidaMin !== null && prevFinMin !== null && salidaMin > prevFinMin;
-                // HORAS = (salida - entrada) en horas, 2 decimales. Solo si el
-                // rango es positivo (no cruzamos medianoche en el MVP).
+                // SAL. TARDÍA: salida ajustada > previsto ajustado (sin gracia).
+                const salidaTardia = !asisteNo && salidaAjustadaMin !== null && prevFinAjustadoMin !== null && salidaAjustadaMin > prevFinAjustadoMin;
+                // HORAS = (salida ajustada - entrada) en horas con 2 decimales.
                 const horas = (() => {
-                  if (asisteNo || entradaMin === null || salidaMin === null) return null;
-                  const diff = salidaMin - entradaMin;
+                  if (asisteNo || entradaMin === null || salidaAjustadaMin === null) return null;
+                  const diff = salidaAjustadaMin - entradaMin;
                   if (diff <= 0) return null;
                   return Math.round((diff / 60) * 100) / 100;
                 })();
