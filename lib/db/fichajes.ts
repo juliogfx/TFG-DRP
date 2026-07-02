@@ -24,7 +24,7 @@ function diferenciaHoras(inicio: Date | null, fin: Date | null): number | null {
 }
 
 /**
- * Heurística por defecto: UCO/Clínicas/Banquillo entran a plantío (30 min
+ * Heurística por defecto: UCO/Clínicas/Banquillo entran a plantío (60 min
  * antes). El resto a servicio. Se usa solo si la plaza no tiene su propio
  * campo `incorporacion` con un valor válido.
  */
@@ -38,6 +38,43 @@ function resolverIncorporacion(plazaIncorporacion: string | null, tipoDotacion: 
   if (plazaIncorporacion === 'PLANTIO' || plazaIncorporacion === 'SERVICIO') return plazaIncorporacion;
   return tipoIncorporacionDeDotacion(tipoDotacion);
 }
+
+/**
+ * Devuelve `true` si la plaza entra 60 min antes del arranque del evento
+ * — PLANTIO y B85 sí, SERVICIO no. Sin valor explícito cae a la heurística
+ * por tipo de dotación (misma que resolverIncorporacion).
+ */
+function entraAnticipada(plazaIncorporacion: string | null, tipoDotacion: TipoDotacion): boolean {
+  const raw = plazaIncorporacion?.toUpperCase() ?? null;
+  if (raw === 'PLANTIO' || raw === 'B85') return true;
+  if (raw === 'SERVICIO') return false;
+  return tipoIncorporacionDeDotacion(tipoDotacion) === 'PLANTIO';
+}
+
+/**
+ * Combina la fecha del evento (`@db.Date`, Date a medianoche UTC) con
+ * una hora "HH:mm" — opcionalmente desplazada N minutos — y devuelve
+ * un ISO string. Null si falta la hora o el formato no es válido.
+ * Sigue el mismo patrón que combinarFechaHora en lib/db/eventos.ts:
+ * setHours modifica la hora en la zona horaria local del servidor.
+ */
+function componerHoraIso(fecha: Date, horaHHmm: string | null, offsetMinutos = 0): string | null {
+  if (!horaHHmm) return null;
+  const partes = horaHHmm.split(':');
+  if (partes.length < 2) return null;
+  const hh = parseInt(partes[0], 10);
+  const mm = parseInt(partes[1], 10);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+  const d = new Date(fecha);
+  d.setHours(hh, mm + offsetMinutos, 0, 0);
+  return d.toISOString();
+}
+
+type EventoHorario = {
+  fecha: Date;
+  horaInicioEvento: string | null;
+  horaFinEvento: string | null;
+};
 
 const plazaSelect = {
   id: true,
@@ -77,8 +114,18 @@ type PlazaConPersona = {
   };
 };
 
-function serializarPlaza(p: PlazaConPersona): FichajeItem {
+function serializarPlaza(p: PlazaConPersona, evento: EventoHorario | null): FichajeItem {
   const puesto = p.rolRequerido ?? p.persona.titulacion?.nombre ?? '';
+  // Horarios propuestos derivados del evento: PLANTIO/B85 arrancan 60 min
+  // antes del inicio; SERVICIO al inicio. El fin coincide con el fin del
+  // evento para todos. Son propuestas — el coordinador puede sobrescribirlas.
+  const offsetInicio = entraAnticipada(p.incorporacion, p.dotacion.tipo) ? -60 : 0;
+  const turnoInicioPrev = evento
+    ? componerHoraIso(evento.fecha, evento.horaInicioEvento, offsetInicio)
+    : null;
+  const turnoFinPrev = evento
+    ? componerHoraIso(evento.fecha, evento.horaFinEvento, 0)
+    : null;
   return {
     asignacionId: p.id,
     personaId: p.persona.id,
@@ -93,11 +140,8 @@ function serializarPlaza(p: PlazaConPersona): FichajeItem {
     listadoPlantio: true,
     incorporacion: resolverIncorporacion(p.incorporacion, p.dotacion.tipo),
     asiste: p.asiste,
-    // PlazaDotacion no persiste horario previsto — se dejaría para F1.5.2.
-    // Sin previsto no hay forma de calcular tardanza, así que ambos flags
-    // van a false para no dar falsos positivos.
-    turnoInicioPrev: null,
-    turnoFinPrev: null,
+    turnoInicioPrev,
+    turnoFinPrev,
     turnoInicioReal: p.turnoInicioReal?.toISOString() ?? null,
     turnoFinReal: p.turnoFinReal?.toISOString() ?? null,
     observaciones: p.observaciones,
@@ -110,26 +154,36 @@ function serializarPlaza(p: PlazaConPersona): FichajeItem {
 }
 
 export async function getFichajesByEvento(eventoId: number): Promise<FichajeItem[]> {
-  const plazas = await prisma.plazaDotacion.findMany({
-    where: { dotacion: { eventoId }, personaId: { not: null } },
-    select: plazaSelect,
-    orderBy: [
-      { dotacion: { codigo: 'asc' } },
-      { numero: 'asc' },
-    ],
-  });
+  const [evento, plazas] = await Promise.all([
+    prisma.evento.findUnique({
+      where: { id: eventoId },
+      select: { fecha: true, horaInicioEvento: true, horaFinEvento: true },
+    }),
+    prisma.plazaDotacion.findMany({
+      where: { dotacion: { eventoId }, personaId: { not: null } },
+      select: plazaSelect,
+      orderBy: [
+        { dotacion: { codigo: 'asc' } },
+        { numero: 'asc' },
+      ],
+    }),
+  ]);
 
   // El where filtra personaId != null, pero Prisma aún tipa la relación como
   // opcional. Este type guard convierte de forma segura sin `as`.
   return plazas
     .filter((p): p is PlazaConPersona => p.persona !== null)
-    .map(serializarPlaza);
+    .map((p) => serializarPlaza(p, evento));
 }
 
 export async function updateFichaje(plazaId: number, input: UpdateFichajeInput): Promise<FichajeItem> {
   const existe = await prisma.plazaDotacion.findUnique({
     where: { id: plazaId },
-    select: { id: true, personaId: true },
+    select: {
+      id: true,
+      personaId: true,
+      dotacion: { select: { eventoId: true } },
+    },
   });
   if (!existe) {
     const err: Error & { code?: string } = new Error(`No existe fichaje con id ${plazaId}`);
@@ -154,12 +208,18 @@ export async function updateFichaje(plazaId: number, input: UpdateFichajeInput):
     },
   });
 
-  const refrescada = await prisma.plazaDotacion.findUniqueOrThrow({
-    where: { id: plazaId },
-    select: plazaSelect,
-  });
+  const [refrescada, evento] = await Promise.all([
+    prisma.plazaDotacion.findUniqueOrThrow({
+      where: { id: plazaId },
+      select: plazaSelect,
+    }),
+    prisma.evento.findUnique({
+      where: { id: existe.dotacion.eventoId },
+      select: { fecha: true, horaInicioEvento: true, horaFinEvento: true },
+    }),
+  ]);
   if (refrescada.persona === null) {
     throw new Error(`La plaza ${plazaId} se quedó sin persona durante el update.`);
   }
-  return serializarPlaza(refrescada as PlazaConPersona);
+  return serializarPlaza(refrescada as PlazaConPersona, evento);
 }
