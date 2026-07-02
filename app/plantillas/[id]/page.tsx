@@ -207,7 +207,7 @@ export default function PlantillaDetallePage() {
   }
 
   return (
-    <div className="h-[calc(100vh-64px)] w-full max-w-full flex flex-col overflow-hidden">
+    <div className="h-full w-full max-w-full flex flex-col overflow-hidden">
       <div className="flex-none min-w-0">
         <div className="mb-4">
           <Link href="/plantillas" className="text-sm text-slate-500 hover:text-slate-700">← Volver a plantillas</Link>
@@ -272,7 +272,7 @@ export default function PlantillaDetallePage() {
           </p>
         </div>
       ) : (
-        <div className="flex-1 w-full min-w-0 overflow-auto rounded-lg border border-slate-200">
+        <div className="flex-1 w-full min-w-0 min-h-0 overflow-auto rounded-lg border border-slate-200">
           <table className="w-full min-w-max text-xs border-separate border-spacing-0">
             <thead className="sticky top-0 z-20 bg-slate-50 shadow-[0_1px_0_0_rgb(226_232_240)]">
               <tr>

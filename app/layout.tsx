@@ -46,10 +46,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-50 text-slate-900`}>
-        <div className="flex min-h-screen">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-50 text-slate-900 overflow-hidden`}>
+        <div className="flex h-screen overflow-hidden">
           <Sidebar />
-          <main className="flex-1 ml-64 p-8">{children}</main>
+          <main className="flex-1 ml-64 min-w-0 h-screen overflow-auto p-8">{children}</main>
         </div>
       </body>
     </html>

@@ -443,7 +443,7 @@ export default function DimensionamientoPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-64px)] w-full max-w-full flex flex-col overflow-hidden">
+    <div className="h-full w-full max-w-full flex flex-col overflow-hidden">
       <div className="flex-none min-w-0">
         <div className="mb-4">
           <Link href="/eventos" className="text-sm text-slate-500 hover:text-slate-700">← Volver a eventos</Link>
@@ -518,7 +518,7 @@ export default function DimensionamientoPage() {
         </div>
       ) : (
         <>
-          <div className="flex-1 w-full min-w-0 overflow-auto">
+          <div className="flex-1 w-full min-w-0 min-h-0 overflow-auto">
             {renderSeccion('PISTA', pista, totPista)}
             {renderSeccion('GRADA', grada, totGrada)}
             {otras.length > 0 && renderSeccion(
