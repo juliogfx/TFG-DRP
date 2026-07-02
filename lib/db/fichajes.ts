@@ -172,7 +172,10 @@ function serializarPlaza(p: PlazaConPersona, evento: EventoHorario | null): Fich
     turnoFinPrev,
     turnoInicioReal: p.turnoInicioReal?.toISOString() ?? null,
     turnoFinReal: p.turnoFinReal?.toISOString() ?? null,
-    observaciones: p.observaciones,
+    // Si la plaza no tiene observaciones propias, mostramos la acreditación
+    // de la persona ("ENTR.D/M/YYYY AS.N") como valor por defecto para que
+    // la columna OBSERV./ACREDIT. no aparezca vacía.
+    observaciones: p.observaciones ?? p.persona?.acreditacion ?? null,
     acreditado: p.persona.acreditacion != null && p.persona.acreditacion.trim() !== '',
     faltaPrevia: !!p.observaciones && /falta previa/i.test(p.observaciones),
     llegadaTardia: false,
