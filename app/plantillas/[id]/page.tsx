@@ -270,7 +270,7 @@ export default function PlantillaDetallePage() {
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-200">
           <table className="w-full text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 shadow-sm">
               <tr>
                 <th className="text-left px-2 py-2 font-medium text-slate-600">DOTACIÓN</th>
                 <th className="text-center px-2 py-2 font-medium text-slate-600">SI/NO</th>
