@@ -394,6 +394,17 @@ async function main() {
   });
   console.log('✓ Titulaciones creadas:', titTES.nombre, titMedico.nombre, titDUE.nombre, titSocorrista.nombre, titVoluntario.nombre, titPracticas.nombre);
 
+  /**
+   * Genera un texto de acreditación con formato "ENTR.D/M/YYYY AS.N".
+   * Empezamos en 2026-01-15 y sumamos un día por cada índice. Sirve para
+   * poblar la columna Acreditado en fichajes con fechas variadas.
+   */
+  function acreditacionParaIndice(n: number): string {
+    const base = new Date(Date.UTC(2026, 0, 15));
+    base.setUTCDate(base.getUTCDate() + (n - 1));
+    return `ENTR.${base.getUTCDate()}/${base.getUTCMonth() + 1}/${base.getUTCFullYear()} AS.${n}`;
+  }
+
   const personas = [
     {
       email: 'voluntario1@drp.test',
@@ -425,11 +436,13 @@ async function main() {
     },
   ];
 
-  for (const p of personas) {
+  for (let i = 0; i < personas.length; i++) {
+    const p = personas[i];
+    const acreditacion = acreditacionParaIndice(i + 1);
     await prisma.persona.upsert({
       where: { email: p.email },
-      update: { titulacionId: p.titulacionId },
-      create: { ...p, activo: true },
+      update: { titulacionId: p.titulacionId, acreditacion },
+      create: { ...p, acreditacion, activo: true },
     });
   }
   console.log('✓ Personal sanitario base creado (4 personas de prueba)');
@@ -553,6 +566,8 @@ async function main() {
       const email = `${key}${idx}@drp-test.com`;
       // Teléfono único por persona: 600000001..600000067
       const telefono = `6${String(i + 1).padStart(8, '0')}`;
+      // Acreditación: seguimos numerando desde AS.5 (las 4 base ocupan AS.1..AS.4).
+      const acreditacion = acreditacionParaIndice(i + 5);
       await prisma.persona.upsert({
         where: { email },
         update: {
@@ -560,6 +575,7 @@ async function main() {
           telefono,
           tipo: tipoPersona(f.puesto),
           titulacionId: titulacionId(f.puesto),
+          acreditacion,
           activo: true,
         },
         create: {
@@ -568,6 +584,7 @@ async function main() {
           telefono,
           tipo: tipoPersona(f.puesto),
           titulacionId: titulacionId(f.puesto),
+          acreditacion,
           activo: true,
         },
       });

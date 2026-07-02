@@ -53,10 +53,12 @@ function entraAnticipada(plazaIncorporacion: string | null, tipoDotacion: TipoDo
 
 /**
  * Combina la fecha del evento (`@db.Date`, Date a medianoche UTC) con
- * una hora "HH:mm" — opcionalmente desplazada N minutos — y devuelve
- * un ISO string. Null si falta la hora o el formato no es válido.
- * Sigue el mismo patrón que combinarFechaHora en lib/db/eventos.ts:
- * setHours modifica la hora en la zona horaria local del servidor.
+ * una hora "HH:mm" en horario local de España (Europe/Madrid) y devuelve
+ * el ISO UTC correspondiente. Aplica opcionalmente un offset en minutos.
+ *
+ * Es independiente del timezone del servidor: si el servidor corre en UTC
+ * (Vercel, contenedor) o en Madrid (dev local), el ISO devuelto refleja
+ * el mismo instante. Respeta DST — CEST (verano, +02:00) o CET (invierno, +01:00).
  */
 function componerHoraIso(fecha: Date, horaHHmm: string | null, offsetMinutos = 0): string | null {
   if (!horaHHmm) return null;
@@ -65,9 +67,35 @@ function componerHoraIso(fecha: Date, horaHHmm: string | null, offsetMinutos = 0
   const hh = parseInt(partes[0], 10);
   const mm = parseInt(partes[1], 10);
   if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
-  const d = new Date(fecha);
-  d.setHours(hh, mm + offsetMinutos, 0, 0);
-  return d.toISOString();
+
+  const y = fecha.getUTCFullYear();
+  const M = fecha.getUTCMonth();
+  const D = fecha.getUTCDate();
+  // Instante "wall-clock" fingiendo que la hora local es UTC.
+  const candidatoMs = Date.UTC(y, M, D, hh, mm + offsetMinutos, 0);
+  // Offset real de Madrid para ese instante; Madrid va por delante de UTC,
+  // así que el instante real en UTC es el candidato MENOS ese offset.
+  const offsetMadridMs = offsetMadridMinutos(new Date(candidatoMs)) * 60000;
+  return new Date(candidatoMs - offsetMadridMs).toISOString();
+}
+
+/**
+ * Offset (minutos) de Europe/Madrid respecto a UTC para el instante dado.
+ * +60 en invierno (CET), +120 en verano (CEST).
+ */
+function offsetMadridMinutos(instante: Date): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Madrid',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  }).formatToParts(instante);
+  const num = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  const madridUtcMs = Date.UTC(
+    num('year'), num('month') - 1, num('day'),
+    num('hour') % 24, num('minute'), num('second'),
+  );
+  return Math.round((madridUtcMs - instante.getTime()) / 60000);
 }
 
 type EventoHorario = {
