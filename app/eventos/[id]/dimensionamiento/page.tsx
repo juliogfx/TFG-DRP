@@ -517,18 +517,16 @@ export default function DimensionamientoPage() {
           </p>
         </div>
       ) : (
-        <>
-          <div className="flex-1 w-full min-w-0 min-h-0 overflow-auto">
-            {renderSeccion('PISTA', pista, totPista)}
-            {renderSeccion('GRADA', grada, totGrada)}
-            {otras.length > 0 && renderSeccion(
-              pista.length === 0 && grada.length === 0 ? 'DOTACIONES' : 'SIN ZONA / OTRAS',
-              otras,
-              totOtras,
-            )}
-          </div>
+        <div className="flex-1 w-full min-w-0 min-h-0 overflow-auto">
+          {renderSeccion('PISTA', pista, totPista)}
+          {renderSeccion('GRADA', grada, totGrada)}
+          {otras.length > 0 && renderSeccion(
+            pista.length === 0 && grada.length === 0 ? 'DOTACIONES' : 'SIN ZONA / OTRAS',
+            otras,
+            totOtras,
+          )}
 
-          <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 grid grid-cols-2 md:grid-cols-7 gap-3 flex-none min-w-0">
+          <div className="sticky bottom-0 left-0 z-30 mt-3 w-full rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 grid grid-cols-2 md:grid-cols-7 gap-3 shadow-[0_-1px_0_0_rgb(191_219_254)]">
             <div><strong>TOTAL GENERAL</strong></div>
             <div>MED: {totGeneral.med}</div>
             <div>DUE: {totGeneral.due}</div>
@@ -537,7 +535,7 @@ export default function DimensionamientoPage() {
             <div>OTR: {totGeneral.otr + totGeneral.socTec}</div>
             <div><strong>TOTAL: {totGeneral.total}</strong></div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
