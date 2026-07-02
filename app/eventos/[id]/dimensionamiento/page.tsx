@@ -353,8 +353,8 @@ export default function DimensionamientoPage() {
     return (
       <div className="mb-6 last:mb-0">
         <h2 className="text-sm font-semibold text-slate-700 mb-2 sticky left-0">{titulo}</h2>
-        <div className="rounded-lg border border-slate-200">
-          <table className="w-full text-xs border-separate border-spacing-0">
+        <div className="rounded-lg border border-slate-200 w-max">
+          <table className="w-full min-w-max text-xs border-separate border-spacing-0">
             <thead className="sticky top-0 z-20 bg-slate-50 shadow-[0_1px_0_0_rgb(226_232_240)]">
               <tr>
                 <th className="sticky left-0 z-30 bg-slate-50 text-left px-2 py-2 font-medium text-slate-600 min-w-[120px]">DOTACIÓN</th>
@@ -443,8 +443,8 @@ export default function DimensionamientoPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-64px)] flex flex-col overflow-hidden">
-      <div className="flex-none">
+    <div className="h-[calc(100vh-64px)] w-full max-w-full flex flex-col overflow-hidden">
+      <div className="flex-none min-w-0">
         <div className="mb-4">
           <Link href="/eventos" className="text-sm text-slate-500 hover:text-slate-700">← Volver a eventos</Link>
         </div>
@@ -518,7 +518,7 @@ export default function DimensionamientoPage() {
         </div>
       ) : (
         <>
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 w-full min-w-0 overflow-auto">
             {renderSeccion('PISTA', pista, totPista)}
             {renderSeccion('GRADA', grada, totGrada)}
             {otras.length > 0 && renderSeccion(
@@ -528,7 +528,7 @@ export default function DimensionamientoPage() {
             )}
           </div>
 
-          <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 grid grid-cols-2 md:grid-cols-7 gap-3 flex-none">
+          <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 grid grid-cols-2 md:grid-cols-7 gap-3 flex-none min-w-0">
             <div><strong>TOTAL GENERAL</strong></div>
             <div>MED: {totGeneral.med}</div>
             <div>DUE: {totGeneral.due}</div>
