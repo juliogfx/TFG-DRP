@@ -62,6 +62,48 @@ function totalRRHH(f: Fila): number {
   return f.med + f.due + f.cond + f.tec + f.socTec + f.otr;
 }
 
+const PLANTILLA_CATALOGO = 'BER-PLA-RMD-FUTBOL';
+
+/**
+ * Lista de dotaciones que se muestra en la tabla cuando el evento no tiene
+ * dimensionamiento persistido ni plantilla aplicada. Se leen los nombres de
+ * las filas de dimensionamiento guardadas en la plantilla base — todas se
+ * devuelven con incluida=false y valores a 0 (solo interesan los nombres
+ * como catálogo de dotaciones posibles). Devuelve [] si la plantilla no
+ * está disponible; el llamador degrada a la vista vacía.
+ */
+async function cargarDotacionesCatalogo(): Promise<Fila[]> {
+  try {
+    const resPlantillas = await fetch('/api/plantillas');
+    if (!resPlantillas.ok) return [];
+    const jsonPlantillas = await resPlantillas.json();
+    const plantillas: Array<{ id: number; nombre: string }> = jsonPlantillas.data ?? [];
+    const base = plantillas.find((p) => p.nombre === PLANTILLA_CATALOGO);
+    if (!base) return [];
+
+    const resDim = await fetch(`/api/plantillas/${base.id}/dimensionamiento`);
+    if (!resDim.ok) return [];
+    const jsonDim = await resDim.json();
+    const filasPlantilla: Array<{ nombre: string }> = jsonDim.data ?? [];
+
+    return filasPlantilla.map((p) => ({
+      id: null,
+      dotacionId: null,
+      nombre: p.nombre,
+      zona: null,
+      incluida: false,
+      med: 0, due: 0, cond: 0, tec: 0, socTec: 0, otr: 0,
+      vehiculo: false, camillas: 0, silla: false,
+      bBasico: 0, bDue: 0, bOxMed: 0,
+      oxig: 0, ampul: 0, morfico: 0,
+      monitor: false, pPantalla: 0, portatil: 0,
+      observ: null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export default function DimensionamientoPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -88,7 +130,15 @@ export default function DimensionamientoPage() {
       ]);
       if (!resDim.ok) throw new Error(`Error ${resDim.status} cargando dimensionamiento`);
       const jsonDim = await resDim.json();
-      setFilas(jsonDim.data ?? []);
+      let filasCargadas: Fila[] = jsonDim.data ?? [];
+      if (filasCargadas.length === 0) {
+        // Sin plantilla y sin dimensionamiento previo: pre-cargar la tabla
+        // desde el catálogo de dotaciones de la plantilla base BER-PLA-RMD-FUTBOL.
+        // Solo se toman los nombres — todas las filas quedan en NO y a 0 hasta
+        // que el coordinador guarde o confirme.
+        filasCargadas = await cargarDotacionesCatalogo();
+      }
+      setFilas(filasCargadas);
       if (resEv.ok) {
         const jsonEv = await resEv.json();
         setEvento(jsonEv.data ?? null);
@@ -464,7 +514,11 @@ export default function DimensionamientoPage() {
         <>
           {renderSeccion('PISTA', pista, totPista)}
           {renderSeccion('GRADA', grada, totGrada)}
-          {otras.length > 0 && renderSeccion('SIN ZONA / OTRAS', otras, totOtras)}
+          {otras.length > 0 && renderSeccion(
+            pista.length === 0 && grada.length === 0 ? 'DOTACIONES' : 'SIN ZONA / OTRAS',
+            otras,
+            totOtras,
+          )}
 
           <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 grid grid-cols-2 md:grid-cols-7 gap-3">
             <div><strong>TOTAL GENERAL</strong></div>
