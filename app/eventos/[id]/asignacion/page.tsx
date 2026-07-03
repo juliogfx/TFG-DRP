@@ -283,6 +283,17 @@ export default function AsignacionPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
+      // Aplicar la plaza actualizada al estado local en lugar de recargar
+      // todo — evita el parpadeo de la tabla completa (setCargando(true)
+      // + refetch de plazas + personal + evento).
+      const plazaActualizada = json.data as PlazaApi | undefined;
+      if (plazaActualizada) {
+        setGrupos((prev) => prev.map((g) =>
+          g.dotacion.id === dotacionId
+            ? { ...g, plazas: g.plazas.map((p) => (p.id === plazaId ? plazaActualizada : p)) }
+            : g
+        ));
+      }
       if (campoIndicador) marcarEstado(plazaId, campoIndicador, 'ok');
       return true;
     } catch (e) {
@@ -325,7 +336,8 @@ export default function AsignacionPage() {
         acron: acronPropuesto,
       });
     }
-    await cargar();
+    // El estado local ya se ha actualizado dentro de cada actualizarPlaza
+    // con la respuesta del PUT — no hace falta recargar toda la tabla.
   }
 
   if (!eventoIdValido) {
@@ -465,8 +477,7 @@ export default function AsignacionPage() {
                         disabled={disabled}
                         onChange={(e) => {
                           if (!asignada || f.dotacionId === null || f.plazaId === null) return;
-                          actualizarPlaza(f.dotacionId, f.plazaId, { contar: e.target.checked }, 'contar')
-                            .then((ok) => { if (ok) cargar(); });
+                          actualizarPlaza(f.dotacionId, f.plazaId, { contar: e.target.checked }, 'contar');
                         }}
                       />
                       {badgeGuardado(f.plazaId, 'contar')}
@@ -500,8 +511,7 @@ export default function AsignacionPage() {
                         disabled={disabled}
                         onChange={(e) => {
                           if (!asignada || f.dotacionId === null || f.plazaId === null) return;
-                          actualizarPlaza(f.dotacionId, f.plazaId, { incorporacion: e.target.value || null }, 'incorporacion')
-                            .then((ok) => { if (ok) cargar(); });
+                          actualizarPlaza(f.dotacionId, f.plazaId, { incorporacion: e.target.value || null }, 'incorporacion');
                         }}
                         className="w-full border border-slate-300 rounded px-1 py-0.5 text-xs disabled:bg-slate-100 disabled:text-slate-400"
                       >
