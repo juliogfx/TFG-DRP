@@ -889,17 +889,27 @@ function UCOContent() {
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <button
-            onClick={() => setFiltrosAbiertos(v => !v)}
-            title={filtrosAbiertos ? 'Ocultar filtros' : 'Buscar evento'}
-            className={`p-2 rounded-md border transition-colors ${
-              filtrosAbiertos
-                ? 'bg-blue-50 border-blue-300 text-blue-600'
-                : 'border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-700'
-            }`}
-          >
-            🔍
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fetchEstado(false)}
+              disabled={!eventoSeleccionado || cargando || actualizando}
+              title="Recargar estado del evento"
+              className="px-3 py-2 rounded-md border border-slate-300 text-slate-600 text-sm hover:border-slate-400 hover:text-slate-800 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {cargando || actualizando ? 'Recargando…' : '↻ Recargar'}
+            </button>
+            <button
+              onClick={() => setFiltrosAbiertos(v => !v)}
+              title={filtrosAbiertos ? 'Ocultar filtros' : 'Buscar evento'}
+              className={`p-2 rounded-md border transition-colors ${
+                filtrosAbiertos
+                  ? 'bg-blue-50 border-blue-300 text-blue-600'
+                  : 'border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-700'
+              }`}
+            >
+              🔍
+            </button>
+          </div>
           <div className="flex items-center gap-2">
             <span className="relative flex h-2.5 w-2.5">
               <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${sinConexion ? 'bg-amber-400' : 'bg-green-400'}`} />

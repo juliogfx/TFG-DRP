@@ -355,7 +355,9 @@ export default function AsignacionPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Asignación de asistentes</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">
+            Asignación de asistentes <span className="text-slate-400 font-normal">· #{eventoId}</span>
+          </h1>
           <p className="text-sm text-slate-500 mt-0.5">{evento?.nombre || `Evento #${eventoId}`}</p>
         </div>
         <div className="text-sm text-slate-500">

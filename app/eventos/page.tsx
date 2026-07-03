@@ -168,6 +168,7 @@ export default function EventosPage() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
+              <th className="text-left px-4 py-3 font-medium text-slate-600">Nº</th>
               <th className="text-left px-4 py-3 font-medium text-slate-600">Nombre</th>
               <th className="text-left px-4 py-3 font-medium text-slate-600">Fecha</th>
               <th className="text-left px-4 py-3 font-medium text-slate-600">Estado</th>
@@ -180,6 +181,7 @@ export default function EventosPage() {
           <tbody className="divide-y divide-slate-100">
             {lista.map((evento) => (
               <tr key={evento.id} className="hover:bg-slate-50 transition-colors">
+                <td className="px-4 py-3 text-xs text-slate-400 font-mono">#{evento.id}</td>
                 <td className="px-4 py-3 font-medium text-slate-900">{evento.nombre}</td>
                 <td className="px-4 py-3 text-slate-600">
                   {new Date(evento.fecha + 'T00:00:00').toLocaleDateString('es-ES')}

@@ -174,7 +174,9 @@ export default function FichajesEventoPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Fichajes</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">
+            Fichajes <span className="text-slate-400 font-normal">· #{eventoId}</span>
+          </h1>
           <p className="text-sm text-slate-500 mt-0.5">
             {evento ? `${evento.nombre} · ${new Date(evento.fecha + 'T00:00:00').toLocaleDateString('es-ES')}` : `Evento #${eventoId}`}
           </p>

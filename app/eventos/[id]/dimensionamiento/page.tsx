@@ -451,7 +451,9 @@ export default function DimensionamientoPage() {
 
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Dimensionamiento</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">
+              Dimensionamiento <span className="text-slate-400 font-normal">· #{eventoId}</span>
+            </h1>
             <p className="text-sm text-slate-500 mt-0.5">{evento?.nombre || `Evento #${eventoId}`}</p>
           </div>
           <div className="flex gap-2">
