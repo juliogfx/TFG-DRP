@@ -35,6 +35,7 @@ export interface ContadoresEvento {
   trasladosClinica: number;
   trasladosHospital: number;
   altasEnLugar: number;
+  altasEnClinica: number;
 }
 
 export interface EstadoUCO {
@@ -48,6 +49,7 @@ export interface EstadoUCO {
   contadores: ContadoresEvento;
   resumen: {
     disponibles: number;
+    enCamino: number;
     enIntervencion: number;
     noOperativas: number;
     total: number;

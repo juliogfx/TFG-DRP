@@ -88,11 +88,12 @@ export async function GET(
       return NextResponse.json({ error: `Evento ${eventoId} no encontrado` }, { status: 404 });
     }
 
-    const [totalIntervenciones, trasladosClinica, trasladosHospital, altasEnLugar] = await Promise.all([
+    const [totalIntervenciones, trasladosClinica, trasladosHospital, altasEnLugar, altasEnClinica] = await Promise.all([
       prisma.intervencion.count({ where: { eventoId } }),
       prisma.intervencion.count({ where: { eventoId, trasladoClinica: true } }),
       prisma.intervencion.count({ where: { eventoId, trasladoHospital: true } }),
       prisma.intervencion.count({ where: { eventoId, altaEnLugar: true } }),
+      prisma.intervencion.count({ where: { eventoId, altaEnClinica: true } }),
     ]);
 
     const dotaciones: DotacionEstado[] = evento.dotaciones.map((d) => {
@@ -121,12 +122,13 @@ export async function GET(
 
     const resumen = {
       disponibles: dotaciones.filter((d) => d.estado === 'CL0_DISPONIBLE').length,
+      enCamino: dotaciones.filter((d) => d.estado === 'CL1_EN_CAMINO').length,
       enIntervencion: dotaciones.filter((d) => d.estado === 'CL2_EN_INTERVENCION').length,
       noOperativas: dotaciones.filter((d) => d.estado === 'CL3_NO_DISPONIBLE').length,
       total: dotaciones.length,
     };
 
-    const contadores: ContadoresEvento = { totalIntervenciones, trasladosClinica, trasladosHospital, altasEnLugar };
+    const contadores: ContadoresEvento = { totalIntervenciones, trasladosClinica, trasladosHospital, altasEnLugar, altasEnClinica };
 
     const estadoUCO: EstadoUCO = {
       eventoId: evento.id,

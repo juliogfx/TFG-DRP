@@ -133,8 +133,9 @@ function IntervencionesContent() {
     dotacionIdParam ? Number(dotacionIdParam) : ''
   );
   const [filtroGravedad, setFiltroGravedad] = useState<'TODAS' | GravedadIntervencion>('TODAS');
-  const [filtroResolucion, setFiltroResolucion] = useState<'TODAS' | 'alta' | 'clinica' | 'hospital'>(
+  const [filtroResolucion, setFiltroResolucion] = useState<'TODAS' | 'alta' | 'alta-clinica' | 'clinica' | 'hospital'>(
     filtroParam === 'alta' ? 'alta'
+    : filtroParam === 'alta-clinica' ? 'alta-clinica'
     : filtroParam === 'clinica' ? 'clinica'
     : filtroParam === 'hospital' ? 'hospital'
     : 'TODAS'
@@ -225,7 +226,7 @@ function IntervencionesContent() {
   }, [dotacionIdParam]);
 
   useEffect(() => {
-    if (filtroParam === 'alta' || filtroParam === 'clinica' || filtroParam === 'hospital') {
+    if (filtroParam === 'alta' || filtroParam === 'alta-clinica' || filtroParam === 'clinica' || filtroParam === 'hospital') {
       setFiltroResolucion(filtroParam);
     } else {
       setFiltroResolucion('TODAS');
@@ -392,6 +393,7 @@ function IntervencionesContent() {
     if (filtroDotacion && i.dotacionActiva?.id !== Number(filtroDotacion)) return false;
     if (filtroGravedad !== 'TODAS' && i.gravedad !== filtroGravedad) return false;
     if (filtroResolucion === 'alta' && !i.altaEnLugar) return false;
+    if (filtroResolucion === 'alta-clinica' && !i.altaEnClinica) return false;
     if (filtroResolucion === 'clinica' && !i.trasladoClinica) return false;
     if (filtroResolucion === 'hospital' && !i.trasladoHospital) return false;
     return true;
@@ -564,6 +566,7 @@ function IntervencionesContent() {
             >
               <option value="TODAS">Todas</option>
               <option value="alta">Alta en lugar</option>
+              <option value="alta-clinica">Alta en clínica</option>
               <option value="clinica">Traslado clínica</option>
               <option value="hospital">Traslado hospital</option>
             </select>
