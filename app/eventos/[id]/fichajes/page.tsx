@@ -102,6 +102,11 @@ export default function FichajesEventoPage() {
   // Poblamos horasLocales solo con las filas nuevas — nunca sobrescribimos las
   // que ya están, para no pisar ediciones del usuario cuando fichajes cambia
   // por un save de otra fila.
+  //
+  // Pre-fill de horas propuestas solo cuando asiste === true. Con asiste
+  // null (no registrado aún) o false (FALTA), los inputs arrancan vacíos
+  // (o muestran la hora real si ya hubiera una guardada). Así ASISTE=null
+  // deja el campo editable sin ninguna sugerencia visual.
   useEffect(() => {
     if (fichajes.length === 0) return;
     setHorasLocales((prev) => {
@@ -109,9 +114,10 @@ export default function FichajesEventoPage() {
       const next = { ...prev };
       for (const f of fichajes) {
         if (!(f.asignacionId in next)) {
+          const prefill = f.asiste === true;
           next[f.asignacionId] = {
-            entrada: isoToHHmm(f.turnoInicioReal ?? f.turnoInicioPrev),
-            salida: isoToHHmm(f.turnoFinReal ?? f.turnoFinPrev),
+            entrada: isoToHHmm(prefill ? (f.turnoInicioReal ?? f.turnoInicioPrev) : f.turnoInicioReal),
+            salida: isoToHHmm(prefill ? (f.turnoFinReal ?? f.turnoFinPrev) : f.turnoFinReal),
           };
           cambio = true;
         }
@@ -290,8 +296,22 @@ export default function FichajesEventoPage() {
                         checked={f.asiste === true}
                         onChange={(e) => {
                           const anterior = f;
-                          const nuevo = e.target.checked ? true : false;
+                          // Enviamos SIEMPRE true o false explícito, nunca null.
+                          // El estado null solo existe en filas que nunca se han tocado.
+                          const nuevo: boolean = e.target.checked;
                           setLocal(f.asignacionId, { asiste: nuevo });
+                          // Al pasar a asiste=true, pre-rellenar visualmente
+                          // H.ENTRADA/H.SALIDA con la hora real (si hay) o la
+                          // propuesta del evento como sugerencia editable.
+                          if (nuevo === true) {
+                            setHorasLocales((prev) => ({
+                              ...prev,
+                              [f.asignacionId]: {
+                                entrada: isoToHHmm(f.turnoInicioReal ?? f.turnoInicioPrev),
+                                salida: isoToHHmm(f.turnoFinReal ?? f.turnoFinPrev),
+                              },
+                            }));
+                          }
                           guardar(f.asignacionId, { asiste: nuevo }, anterior);
                         }}
                       />
