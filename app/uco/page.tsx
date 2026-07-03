@@ -891,7 +891,7 @@ function UCOContent() {
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => fetchEstado(false)}
+              onClick={() => fetchEstado(true)}
               disabled={!eventoSeleccionado || cargando || actualizando}
               title="Recargar estado del evento"
               className="px-3 py-2 rounded-md border border-slate-300 text-slate-600 text-sm hover:border-slate-400 hover:text-slate-800 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
