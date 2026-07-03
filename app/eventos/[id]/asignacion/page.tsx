@@ -22,6 +22,7 @@ interface PersonaApi {
   tipo: 'VOLUNTARIO' | 'FACULTATIVO';
   titulacion: string | null;
   telefono: string | null;
+  acreditacion: string | null;
 }
 
 interface PlazaApi {
@@ -33,7 +34,7 @@ interface PlazaApi {
   contar: boolean;
   acron: string | null;
   observaciones: string | null;
-  persona: { id: number; nombreCompleto: string; tipo: string; titulacion: string | null; telefono: string | null } | null;
+  persona: { id: number; nombreCompleto: string; tipo: string; titulacion: string | null; telefono: string | null; acreditacion: string | null } | null;
 }
 
 interface GrupoApi {
@@ -520,7 +521,7 @@ export default function AsignacionPage() {
                     <td className="px-3 py-1.5 whitespace-nowrap">
                       <input
                         type="text"
-                        value={f.observaciones ?? ''}
+                        value={f.observaciones ?? f.persona.acreditacion ?? ''}
                         disabled={disabled}
                         onChange={(e) => {
                           const nuevo = e.target.value;
@@ -531,6 +532,10 @@ export default function AsignacionPage() {
                         }}
                         onBlur={(e) => {
                           if (!asignada || f.dotacionId === null || f.plazaId === null) return;
+                          // Si la plaza no tenía observaciones propias y el usuario no ha
+                          // tocado el campo, el value visible es la acreditación de la
+                          // persona (solo por defecto visual). No persistirla como observaciones.
+                          if (f.observaciones === null && e.target.value === (f.persona.acreditacion ?? '')) return;
                           actualizarPlaza(f.dotacionId, f.plazaId, { observaciones: e.target.value || null }, 'observaciones');
                         }}
                         maxLength={200}

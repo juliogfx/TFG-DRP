@@ -479,7 +479,7 @@ export async function updateAsistencia(
 export async function getPersonalDisponible(): Promise<PersonaListItem[]> {
   const personas = await prisma.persona.findMany({
     where: { activo: true },
-    select: { id: true, nombreCompleto: true, tipo: true, titulacion: { select: { nombre: true } }, telefono: true, activo: true },
+    select: { id: true, nombreCompleto: true, tipo: true, titulacion: { select: { nombre: true } }, telefono: true, acreditacion: true, activo: true },
     orderBy: { nombreCompleto: 'asc' },
   });
   return personas.map((p) => ({

@@ -110,6 +110,7 @@ export interface PersonaListItem {
   tipo: TipoPersona;
   titulacion: string | null;
   telefono: string | null;
+  acreditacion: string | null;
   activo: boolean;
 }
 

@@ -27,6 +27,7 @@ export interface PlazaItem {
     tipo: string;
     titulacion: string | null;
     telefono: string | null;
+    acreditacion: string | null;
   } | null;
 }
 
@@ -84,6 +85,7 @@ const plazaSelect = {
       tipo: true,
       titulacion: { select: { nombre: true } },
       telefono: true,
+      acreditacion: true,
     },
   },
 } as const;
@@ -97,7 +99,7 @@ function serializarPlaza(p: {
   contar: boolean;
   acron: string | null;
   observaciones: string | null;
-  persona: { id: number; nombreCompleto: string; tipo: string; titulacion: { nombre: string } | null; telefono: string | null } | null;
+  persona: { id: number; nombreCompleto: string; tipo: string; titulacion: { nombre: string } | null; telefono: string | null; acreditacion: string | null } | null;
 }): PlazaItem {
   return {
     id: p.id,
@@ -114,6 +116,7 @@ function serializarPlaza(p: {
       tipo: p.persona.tipo,
       titulacion: p.persona.titulacion?.nombre ?? null,
       telefono: p.persona.telefono,
+      acreditacion: p.persona.acreditacion,
     } : null,
   };
 }
