@@ -41,7 +41,3 @@ next-env.d.ts
 
 # Generated documentation
 docs/
-
-# Local dev tooling / working files (no compartir en el repo)
-.claude/
-estructura.txt
