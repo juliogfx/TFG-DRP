@@ -501,7 +501,6 @@ interface CeldaContador {
   etiqueta: string;
   valor: number;
   color: string;
-  bgColor?: string;
   onClick: () => void;
 }
 
@@ -516,7 +515,7 @@ function BloqueContadores({ titulo, celdas }: { titulo: string; celdas: CeldaCon
           <button
             key={c.etiqueta}
             onClick={c.onClick}
-            className={`px-2 py-[10px] text-center transition hover:bg-slate-50 ${c.bgColor ?? ''} ${i > 0 ? 'border-l border-slate-200/60' : ''}`}
+            className={`px-2 py-[10px] text-center transition hover:bg-slate-50 ${i > 0 ? 'border-l border-slate-200/60' : ''}`}
           >
             <p className={`text-[24px] font-semibold leading-tight ${c.color}`}>{c.valor}</p>
             <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">{c.etiqueta}</p>
@@ -1056,7 +1055,7 @@ function UCOContent() {
               celdas={[
                 { etiqueta: 'Total',           valor: estadoUCO.resumen.total,         color: 'text-slate-800', onClick: () => router.push(urlDotaciones()) },
                 { etiqueta: 'CL0 Disponibles', valor: estadoUCO.resumen.disponibles,   color: 'text-green-700', onClick: () => router.push(urlDotaciones('CL0_DISPONIBLE')) },
-                { etiqueta: 'CL1 En camino',   valor: estadoUCO.resumen.enCamino,       color: 'text-blue-700',  bgColor: 'bg-blue-50',    onClick: () => router.push(urlDotaciones('CL1_EN_CAMINO')) },
+                { etiqueta: 'CL1 En camino',   valor: estadoUCO.resumen.enCamino,       color: 'text-blue-700',  onClick: () => router.push(urlDotaciones('CL1_EN_CAMINO')) },
                 { etiqueta: 'CL2 En interv.',  valor: estadoUCO.resumen.enIntervencion, color: 'text-red-700',   onClick: () => router.push(urlDotaciones('CL2_EN_INTERVENCION')) },
                 { etiqueta: 'CL3 No oper.',    valor: estadoUCO.resumen.noOperativas,   color: 'text-slate-500', onClick: () => router.push(urlDotaciones('CL3_NO_DISPONIBLE')) },
               ]}
@@ -1067,7 +1066,7 @@ function UCOContent() {
                 { etiqueta: 'Total',           valor: estadoUCO.contadores.totalIntervenciones, color: 'text-slate-800',   onClick: () => router.push(urlIntervenciones()) },
                 { etiqueta: 'En curso',        valor: intervencionesAbiertas.length,            color: 'text-blue-700',    onClick: () => router.push(urlIntervenciones('activa')) },
                 { etiqueta: 'Altas en lugar',  valor: estadoUCO.contadores.altasEnLugar,        color: 'text-green-700',   onClick: () => router.push(urlIntervenciones('alta')) },
-                { etiqueta: 'Altas en clínica',valor: estadoUCO.contadores.altasEnClinica,      color: 'text-emerald-700', bgColor: 'bg-emerald-50', onClick: () => router.push(urlIntervenciones('alta-clinica')) },
+                { etiqueta: 'Altas en clínica',valor: estadoUCO.contadores.altasEnClinica,      color: 'text-emerald-700', onClick: () => router.push(urlIntervenciones('alta-clinica')) },
                 { etiqueta: 'Trasl. clínica',  valor: estadoUCO.contadores.trasladosClinica,    color: 'text-orange-700',  onClick: () => router.push(urlIntervenciones('clinica')) },
                 { etiqueta: 'Trasl. hospital', valor: estadoUCO.contadores.trasladosHospital,   color: 'text-red-700',     onClick: () => router.push(urlIntervenciones('hospital')) },
               ]}
