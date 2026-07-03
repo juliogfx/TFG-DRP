@@ -671,8 +671,9 @@ function UCOContent() {
     setRegistrando(true);
     try {
       // Si el coordinador asigna la dotación al registrar, la intervención
-      // arranca EN_CURSO con horaLlegada=now(). Sin dotación, queda en
-      // PENDIENTE_DOTACION (estado lo calcula el backend).
+      // arranca EN_CURSO y el backend pone la dotación en CL1_EN_CAMINO.
+      // Sin dotación, queda en PENDIENTE_DOTACION (estado lo calcula el
+      // backend). horaLlegada NO se pre-rellena: la confirma después el UCO.
       const dotActivaId = formIntervencion.dotacionActivaId ? Number(formIntervencion.dotacionActivaId) : null;
       const esHospital = formIntervencion.resolucion === 'TRASLADO_HOSPITALARIO';
       const esClinica = formIntervencion.resolucion === 'TRASLADO_CLINICA' || formIntervencion.resolucion === 'ALTA_EN_CLINICA';
@@ -685,7 +686,6 @@ function UCOContent() {
         sector: formIntervencion.sector.trim() || null,
         lugar: formIntervencion.lugar.trim() || null,
         horaAviso: formIntervencion.horaAviso,
-        horaLlegada: dotActivaId ? new Date().toISOString() : undefined,
         dotacionApoyoId: formIntervencion.dotacionApoyoId ? Number(formIntervencion.dotacionApoyoId) : undefined,
         resolucion: formIntervencion.resolucion,
         // hospitalDestino se reutiliza también para clínica como texto libre
@@ -702,24 +702,8 @@ function UCOContent() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
-      // Cambiar dotación a CL2_EN_INTERVENCION automáticamente.
-      // Solo aplica si efectivamente se asignó dotación al registrar.
-      if (body.dotacionActivaId) {
-        const dotId = body.dotacionActivaId;
-        fetch(`/api/dotaciones/${dotId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ estado: 'CL2_EN_INTERVENCION' }),
-        }).catch(console.error);
-        setEstadoUCO((prev) => prev ? {
-          ...prev,
-          dotaciones: prev.dotaciones.map((d) =>
-            d.id === dotId
-              ? { ...d, estado: 'CL2_EN_INTERVENCION' as const }
-              : d
-          ),
-        } : prev);
-      }
+      // El backend deja la dotación en CL1_EN_CAMINO. La llegada la
+      // confirma después el UCO con "Marcar llegada" (endpoint /llegada).
       await fetchEstado(true);
       setShowModalIntervencion(false);
       setFormIntervencion(FORM_INTERVENCION_INICIAL);

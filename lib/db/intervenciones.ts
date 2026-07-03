@@ -141,6 +141,10 @@ function flagsDesdeResolucion(r: ResolucionIntervencion | null | undefined): {
  * Estado inicial:
  *   - PENDIENTE_DOTACION si no se pasa dotacionActivaId
  *   - EN_CURSO si se pasa dotacionActivaId
+ *
+ * Si se asigna dotacionActivaId al crear, la dotación pasa a CL1_EN_CAMINO
+ * (no CL2_EN_INTERVENCION — la llegada la confirma después el UCO desde
+ * /api/intervenciones/[id]/llegada).
  */
 export async function createIntervencion(
   input: CreateIntervencionInput
@@ -157,6 +161,19 @@ export async function createIntervencion(
       select: { numeroIntervencion: true },
     });
     const numeroIntervencion = (ultima?.numeroIntervencion ?? 0) + 1;
+
+    if (input.dotacionActivaId) {
+      await tx.dotacion.update({
+        where: { id: input.dotacionActivaId },
+        data: { estado: 'CL1_EN_CAMINO' },
+      });
+    }
+    if (input.dotacionApoyoId) {
+      await tx.dotacion.update({
+        where: { id: input.dotacionApoyoId },
+        data: { estado: 'CL1_EN_CAMINO' },
+      });
+    }
 
     return tx.intervencion.create({
       data: {
