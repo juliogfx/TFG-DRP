@@ -4,6 +4,9 @@ Plataforma web para la gestión operativa de Dispositivos de Riesgos
 Previsibles (DRP) en eventos de concurrencia masiva. Desarrollada como
 Trabajo Fin de Grado en Ingeniería Informática (UNIR, 2026).
 
+**Autor:** Julio García Fernández  
+**Director:** Luis Pedraza Gomar
+
 ## Stack técnico
 - Next.js 14 + TypeScript
 - Prisma 7 + PostgreSQL (Supabase)
